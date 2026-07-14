@@ -1,0 +1,48 @@
+{
+  "name": "@ssa/ui",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:unit": "vitest run"
+  },
+  "exports": {
+    "./access-provider": "./src/access-provider.tsx",
+    "./dialog": "./src/dialog.tsx",
+    "./settings-modal": "./src/settings-modal.tsx",
+    "./project-portfolio-provider": "./src/project-portfolio-provider.tsx",
+    "./app-shell": "./src/chrome/app-shell.tsx",
+    "./page-shell": "./src/chrome/page-shell.tsx",
+    "./module-gate": "./src/module-gate.tsx",
+    "./access-gate": "./src/access-gate.tsx",
+    "./project-nav": "./src/chrome/project-nav.tsx",
+    "./navigation-progress": "./src/chrome/navigation-progress.tsx",
+    "./info-grid": "./src/info-grid.tsx",
+    "./invalid-project-state": "./src/chrome/invalid-project-state.tsx",
+    "./route-groups": "./src/route-groups.ts",
+    "./module-registry": "./src/module-registry.ts",
+    "./project-switcher": "./src/chrome/project-switcher.tsx",
+    "./chrome": "./src/chrome/index.ts",
+    "./router-adapter": "./src/router-adapter.tsx",
+    "./router-adapter.next": "./src/router-adapter.next.tsx",
+    "./chrome-data": "./src/chrome-data.tsx"
+  },
+  "dependencies": {
+    "@ssa/project-context": "*"
+  },
+  "peerDependencies": {
+    "next": "^15.0.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "next": "^15.0.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "typescript": "^5.6.3"
+  }
+}

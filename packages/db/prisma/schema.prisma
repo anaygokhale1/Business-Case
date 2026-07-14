@@ -1,0 +1,31 @@
+// Minimal Prisma schema for the template. SQLite so a fresh clone runs with no
+// database server. Real SSA Pro uses Postgres with many models; here there is
+// ONE example model (SampleItem) that the Sample Tracker module reads and
+// writes. Add your module's models below and run ./scripts/reset.sh.
+//
+// Note: SQLite does not support Prisma enums or scalar lists. Use String
+// columns (as SampleItem.category does) instead of enum types.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// The example module's data. `projectSlug` scopes each row to a project (the
+// same slug the shell uses in PortfolioProject). Kept as a plain String rather
+// than a foreign key because the template serves its project list statically
+// from @ssa/project-context; PHASE-3 would make projects a real table.
+model SampleItem {
+  id          String   @id @default(cuid())
+  projectSlug String
+  title       String
+  category    String
+  owner       String
+  createdAt   DateTime @default(now())
+
+  @@index([projectSlug])
+}
