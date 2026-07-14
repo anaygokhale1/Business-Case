@@ -32,9 +32,11 @@ The shipped example is Sample Tracker (module key `sampleTracker`, route key `sa
 
 ## How to add a page or module
 
-Adding a module means registering it in three namespaces. Nav is data-driven, so do not hand-edit the shell chrome components.
+Real SSA Pro names a module in three namespaces: `PlatformModule` (Postgres DB enum, UPPER_SNAKE), `ProjectModuleKey` (per-project toggle, camelCase), and `ModuleKey` (nav/routing, kebab-case). This template implements the last two. It has no `PlatformModule` enum because SQLite has no Prisma enums, so module enablement here is static seed data; you add that value only when the module moves to the real platform (see the next section).
 
-1. Route/nav key (kebab-case): add it to `ModuleKey` and add a `MODULE_REGISTRY` entry in `packages/ui/src/module-registry.ts` (href, match regex, `requiresModule`).
+Register the module (nav is data-driven, so do not hand-edit the shell chrome):
+
+1. Route/nav key (kebab-case): add it to `ModuleKey` and a `MODULE_REGISTRY` entry in `packages/ui/src/module-registry.ts` (href, match regex, `requiresModule`).
 2. Per-project key (camelCase): add it to `ProjectModuleKey` and to `createDefaultModules()` in `packages/project-context/src/project-portfolio.ts`.
 3. Nav row: add one row to `PROJECT_MODULE_NAV` in `packages/ui/src/route-groups.ts` (`moduleKey`, `navKey`, `label`).
 
@@ -42,11 +44,15 @@ Then:
 
 - Create the module folder under `apps/shell/src/apps/<module>/`.
 - Mount a route under `apps/shell/src/app/(app)/apps/<module>/...`, wrapped in `<ModuleGate projectId moduleKey="<camelKey>">`.
-- Add API handlers under `apps/shell/src/app/api/apps/<module>/...` that call `requireProjectAccess(slug, "<camelKey>")` from `@ssa/server` and use `prisma` from `@ssa/db`.
+- Add API handlers under `apps/shell/src/app/api/apps/<module>/...` that call `requireProjectAccess(slug, "<camelKey>")` from `@ssa/server/access-service` and use `prisma` from `@ssa/db`.
 - Add the Prisma model to `packages/db/prisma/schema.prisma`.
 - Run `./scripts/reset.sh` to apply the schema change and re-seed.
 
 Copy Sample Tracker and adapt it. It exercises every one of these steps.
+
+## Moving your module to real SSA Pro
+
+The layout and call shapes here match the real platform, so a module carries over with two additions: add its `PlatformModule` enum value (UPPER_SNAKE) to the real Postgres schema, and convert any `String` status columns to the platform's Prisma enums. The platform provides auth, audit, and AI wiring through `@ssa/server` and `@ssa/ai-client`; follow the platform's INTEGRATION-PLAYBOOK when you land the module.
 
 ## Your module spec
 

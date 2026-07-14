@@ -1,4 +1,5 @@
 import { demoUsers, type DemoUser } from "@ssa/project-context/access-model";
+import type { ProjectModuleKey } from "@ssa/project-context/project-portfolio";
 
 // Server-side access checks for module API routes (@ssa/server/access-service).
 //
@@ -28,7 +29,7 @@ export async function requireCurrentUser(): Promise<DemoUser> {
 // user on success. PHASE-3: check DB membership and module enablement.
 export async function requireProjectAccess(
   _projectSlug: string,
-  _moduleKey?: string
+  _moduleKey?: ProjectModuleKey
 ): Promise<{ user: DemoUser }> {
   return { user: DEMO_USER };
 }

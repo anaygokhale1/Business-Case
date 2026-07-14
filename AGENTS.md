@@ -56,13 +56,30 @@ Always use the scripts. Never run ad-hoc server commands.
 
 ## Adding a module
 
-Register the module in three namespaces. Nav is data-driven, so do not hand-edit chrome.
+Real SSA Pro names a module in three namespaces: `PlatformModule` (Postgres DB enum, UPPER_SNAKE), `ProjectModuleKey` (per-project toggle, camelCase), and `ModuleKey` (nav/routing, kebab-case). This template implements the last two. It has no `PlatformModule` enum because SQLite has no Prisma enums, so module enablement here is static seed data — you add the `PlatformModule` value only when the module lands on the real platform (see "Moving a module").
 
-1. Route/nav key (kebab-case): add to `ModuleKey` and a `MODULE_REGISTRY` entry in `packages/ui/src/module-registry.ts`.
-2. Per-project key (camelCase): add to `ProjectModuleKey` and `createDefaultModules()` in `packages/project-context/src/project-portfolio.ts`.
-3. Nav row: add one row to `PROJECT_MODULE_NAV` in `packages/ui/src/route-groups.ts`.
+Steps (nav is data-driven, so never hand-edit chrome):
 
-Then create the module folder under `apps/shell/src/apps/<module>/`, mount a route wrapped in `<ModuleGate>`, add API handlers that call `requireProjectAccess` from `@ssa/server` and `prisma` from `@ssa/db`, add the Prisma model, and run `./scripts/reset.sh`. Sample Tracker is the copy-and-adapt reference. See README.md for the full recipe.
+1. `ModuleKey` (kebab-case): add it plus a `MODULE_REGISTRY` entry (href, match, `requiresModule`) in `packages/ui/src/module-registry.ts`.
+2. `ProjectModuleKey` (camelCase): add it plus a `createDefaultModules()` entry in `packages/project-context/src/project-portfolio.ts`.
+3. Nav row: add one `PROJECT_MODULE_NAV` row (`moduleKey`, `navKey`, `label`) in `packages/ui/src/route-groups.ts`.
+4. Create `apps/shell/src/apps/<module>/` (components, hooks, lib).
+5. Mount a route at `apps/shell/src/app/(app)/apps/<module>/...` wrapped in `<ModuleGate projectId moduleKey="<camelKey>">`.
+6. Add API handlers at `apps/shell/src/app/api/apps/<module>/...` that call `requireProjectAccess(slug, "<camelKey>")` from `@ssa/server/access-service` and use `prisma` from `@ssa/db`.
+7. Add the Prisma model to `packages/db/prisma/schema.prisma`, then run `./scripts/reset.sh`.
+
+Sample Tracker exercises every step — copy and adapt it. See README.md for the full walkthrough.
+
+## Conventions
+
+- Surgical edits. Change what the task needs; no whole-file rewrites or opportunistic refactors.
+- Modules never run their own login. Identity and access come from `@ssa/server` (`requireProjectAccess`, `requireCurrentUser`).
+- Files under `apps/shell/src/components` that read `export * from "@ssa/…"` are re-export shims. Edit the package, not the shim.
+- SQLite has no enums or scalar lists. Use `String` columns (see `SampleItem.category`), not Prisma `enum` types.
+
+## Moving a module to real SSA Pro
+
+The folder layout, registry, nav, `ModuleGate`, `@ssa/db`, and `@ssa/server/access-service` call shapes match the real platform, so a module built here carries over with two additions: add its `PlatformModule` enum value (UPPER_SNAKE) to the real Postgres schema, and map any `String` status columns to the platform's Prisma enums. Auth, audit, and AI wiring are provided by the platform — see its INTEGRATION-PLAYBOOK.
 
 ## Skills
 
