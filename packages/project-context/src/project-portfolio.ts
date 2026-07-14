@@ -154,10 +154,18 @@ export const defaultProjects: PortfolioProject[] = [
         type: "Owner",
         email: "jlee@example.com",
         access: "All Modules"
+      },
+      {
+        userId: "demo",
+        initials: "DU",
+        name: "Demo User",
+        type: "Internal",
+        email: "demo@example.com",
+        access: "All Modules"
       }
     ],
     archivedAt: null,
-    currentUserRole: "OWNER",
+    currentUserRole: "MEMBER",
     insights: {
       summary: [
         "Sample Tracker is disabled for this project.",
