@@ -1,0 +1,15 @@
+Northwind Assurance — Claims Handling Time Study
+Prepared 2026-06-01 · synthetic illustration only
+
+Task Type,Region,Handle Time (min),Annual Volume
+New claim intake,North America,31,240 000
+Adjustment,North America,18,"410,000"
+Coverage review,North America,44,96000
+Settlement,North America,26,180000
+Reopened claim,North America,38,42000
+New claim intake,Europe,8:30,120000
+Adjustment,Europe,22.5,95000
+Coverage review,Europe,"1.234",41000
+Settlement,,26,180000
+Subtotal,,,
+Bulk write-off,APAC,not measured,15000

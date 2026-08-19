@@ -25,7 +25,7 @@ import { BatchUnits } from "./batch-units";
 import { BatchWorkload } from "./batch-workload";
 
 export function InputsWorkspace({ onGenerated }: { onGenerated: () => void }) {
-  const { readiness, generate, reset, loadSample, revision } = useCaseStore();
+  const { readiness, generate, reset, loadSample, revision, toggleSkip } = useCaseStore();
   const [active, setActive] = useState<BatchId>("company");
 
   const status = statusMapOf(readiness);
@@ -62,9 +62,11 @@ export function InputsWorkspace({ onGenerated }: { onGenerated: () => void }) {
         </nav>
 
         <div className="space-y-6">
+          <SkipBar batch={current} onToggle={() => toggleSkip(current.batch.id)} />
+
           {/* Keyed on revision so replacing the case wholesale re-mounts the fields
               and their editing drafts, rather than leaving a stale string in a box. */}
-          <div key={`${current.batch.id}-${revision}`}>
+          <div key={`${current.batch.id}-${revision}`} hidden={current.skipped}>
             {current.batch.id === "company" ? <BatchCompany {...props} /> : null}
             {current.batch.id === "scope" ? <BatchScope {...props} /> : null}
             {current.batch.id === "roles" ? <BatchRoles {...props} /> : null}
@@ -198,6 +200,52 @@ function ProgressHeader({
   );
 }
 
+/**
+ * The not-applicable control.
+ *
+ * A batch is skippable exactly when nothing in it is required, which is derived rather
+ * than declared. Where it is not skippable the bar says which answers are the reason —
+ * a disabled button with no explanation just leaves the user guessing why.
+ */
+function SkipBar({ batch, onToggle }: { batch: BatchProgress; onToggle: () => void }) {
+  if (batch.skipped) {
+    return (
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-panel px-5 py-4">
+        <p className="text-sm text-muted">
+          <span className="font-bold text-ink">{batch.batch.label}</span> is marked not applicable.
+          Its questions are excluded from the count, and anything it would have contributed keeps its
+          documented default.
+        </p>
+        <button type="button" className={ghostButtonClass} onClick={onToggle}>
+          Include this section
+        </button>
+      </div>
+    );
+  }
+
+  if (!batch.skippable) {
+    const names = batch.questions
+      .filter((q) => q.question.required)
+      .map((q) => q.question.label);
+    return (
+      <p className="px-1 text-xs text-outline">
+        This section cannot be skipped — the case needs {names.join(", ").toLowerCase()}.
+      </p>
+    );
+  }
+
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-3 px-1">
+      <p className="text-xs text-outline">
+        Everything in this section is optional or has a documented default.
+      </p>
+      <button type="button" className={ghostButtonClass} onClick={onToggle}>
+        Not applicable — skip this section
+      </button>
+    </div>
+  );
+}
+
 function RailItem({
   batch,
   ordinal,
@@ -225,7 +273,15 @@ function RailItem({
         <span className={`text-sm font-bold ${active ? "text-white" : "text-ink"}`}>
           {ordinal}. {batch.batch.label}
         </span>
-        {blocked ? (
+        {batch.skipped ? (
+          <span
+            className={`text-[10px] font-extrabold uppercase tracking-[0.1em] ${
+              active ? "text-white/70" : "text-outline"
+            }`}
+          >
+            skipped
+          </span>
+        ) : blocked ? (
           <span
             className={`text-[10px] font-extrabold uppercase tracking-[0.1em] ${
               active ? "text-red-200" : "text-red-600"
@@ -245,9 +301,11 @@ function RailItem({
         ) : null}
       </div>
       <p className={`mt-0.5 text-xs ${active ? "text-white/70" : "text-outline"}`}>
-        {batch.applicable === 0
-          ? "optional"
-          : `${batch.answered} / ${batch.applicable} answered`}
+        {batch.skipped
+          ? "not applicable"
+          : batch.applicable === 0
+            ? "optional"
+            : `${batch.answered} / ${batch.applicable} answered`}
       </p>
     </button>
   );

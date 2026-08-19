@@ -154,6 +154,15 @@ export interface TimeStudyRow {
   taskType: string;
   minutes: number;
   volume: number;
+  /**
+   * Which region the task was measured in.
+   *
+   * Absent means portfolio-wide: the task applies to every region that has no
+   * study of its own. That is the fallback rather than the default, because a
+   * study measured in one region and applied silently to all of them is how a
+   * regional difference in how work is done disappears from a model.
+   */
+  region?: string;
 }
 
 export interface Override {

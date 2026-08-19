@@ -63,9 +63,14 @@ export type CaseAction =
   | { type: "unit/setHeadcount"; unitId: string; roleId: string; value: Driver }
   | { type: "unit/setCost"; unitId: string; roleId: string; value: Driver }
   | { type: "unit/remove"; unitId: string }
-  | { type: "timeStudy/add" }
+  | { type: "timeStudy/add"; region?: string }
   | { type: "timeStudy/set"; index: number; patch: Partial<TimeStudyRow> }
+  | { type: "timeStudy/setRegion"; index: number; region: string | null }
   | { type: "timeStudy/remove"; index: number }
+  | { type: "timeStudy/replaceScope"; region: string | null; rows: TimeStudyRow[] }
+  | { type: "timeStudy/append"; rows: TimeStudyRow[] }
+  | { type: "timeStudy/clear" }
+  | { type: "timeStudy/adoptVolume"; region: string }
   | { type: "phaseWeights/set"; profile: ExitProfile; index: number; value: number }
   | { type: "phaseWeights/resize"; phaseCount: number }
   | { type: "benchmark/applyCompensation" }
@@ -341,10 +346,12 @@ export function caseReducer(state: Case, action: CaseAction): Case {
 
     /* -------------------------- time study -------------------------------- */
 
-    case "timeStudy/add":
-      // 20 rows is the skill's cap for the Time Study tab.
-      if (state.timeStudy.length >= 20) return state;
-      return { ...state, timeStudy: [...state.timeStudy, { taskType: "", minutes: 0, volume: 0 }] };
+    case "timeStudy/add": {
+      const row: TimeStudyRow = { taskType: "", minutes: 0, volume: 0 };
+      // Absent region means portfolio-wide, so the key is only set when there is one.
+      if (action.region !== undefined) row.region = action.region;
+      return { ...state, timeStudy: [...state.timeStudy, row] };
+    }
 
     case "timeStudy/set":
       return {
@@ -354,8 +361,56 @@ export function caseReducer(state: Case, action: CaseAction): Case {
         ),
       };
 
+    case "timeStudy/setRegion":
+      return {
+        ...state,
+        timeStudy: state.timeStudy.map((row, i) => {
+          if (i !== action.index) return row;
+          const next: TimeStudyRow = { ...row };
+          // null means portfolio-wide, which is the ABSENCE of the key rather than a
+          // region called "". Same reason as the inheritable drivers.
+          if (action.region === null) delete next.region;
+          else next.region = action.region;
+          return next;
+        }),
+      };
+
     case "timeStudy/remove":
       return { ...state, timeStudy: state.timeStudy.filter((_, i) => i !== action.index) };
+
+    case "timeStudy/replaceScope": {
+      // An import replaces the scope it targets rather than appending to it, so
+      // re-importing a corrected file does not silently double the volumes.
+      const kept = state.timeStudy.filter((row) =>
+        action.region === null ? row.region !== undefined : row.region !== action.region,
+      );
+      return { ...state, timeStudy: [...kept, ...action.rows] };
+    }
+
+    case "timeStudy/append":
+      return { ...state, timeStudy: [...state.timeStudy, ...action.rows] };
+
+    case "timeStudy/clear":
+      return { ...state, timeStudy: [] };
+
+    case "timeStudy/adoptVolume": {
+      // Set the region's registered volume from its study. Only meaningful when the
+      // study is believed to cover all of the region's work — which is exactly the
+      // condition G25 checks — so it is an explicit press, never automatic.
+      const total = state.timeStudy
+        .filter((r) => r.region === action.region)
+        .reduce((acc, r) => acc + r.volume, 0);
+      if (total <= 0) return state;
+
+      const inRegion = state.units.filter((u) => u.region === action.region);
+      if (inRegion.length !== 1) {
+        // With several rows in the region there is no non-arbitrary way to split the
+        // studied volume between them, and inventing a split would be worse than
+        // declining. The UI only offers the button for a single-row region.
+        return state;
+      }
+      return patchUnit(state, inRegion[0]!.id, (u) => ({ ...u, volume: total }));
+    }
 
     /* ------------------------- phase weights ----------------------------- */
 

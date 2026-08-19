@@ -217,3 +217,127 @@ describe("draft persistence", () => {
     expect(input(/company name/i).value).toBe("");
   });
 });
+
+/* -------------------------------------------------------------------------- */
+/* Time study: region scoping, skipping, and upload                           */
+/* -------------------------------------------------------------------------- */
+
+describe("time study", () => {
+  const withRegions = () => {
+    mount();
+    goToBatch(/scope & regions/i);
+    fireEvent.change(screen.getByRole("textbox"), { target: { value: "Europe" } });
+    fireEvent.click(button(/add region/i));
+    fireEvent.change(screen.getAllByRole("textbox")[0]!, { target: { value: "APAC" } });
+    fireEvent.click(button(/add region/i));
+    goToBatch(/time study/i);
+  };
+
+  it("offers a scope per region plus a portfolio-wide scope", () => {
+    withRegions();
+    expect(button(/^All regions$/)).toBeTruthy();
+    expect(button(/^Europe$/)).toBeTruthy();
+    expect(button(/^APAC$/)).toBeTruthy();
+  });
+
+  it("adds a task row into the selected region only", () => {
+    withRegions();
+    fireEvent.click(button(/^Europe$/));
+    fireEvent.click(button(/add a task row/i));
+
+    fireEvent.change(input(/minutes for task row 1/i), { target: { value: "30" } });
+    fireEvent.change(input(/volume for task row 1/i), { target: { value: "60000" } });
+
+    // The row is tagged to Europe, so switching scope hides it.
+    expect(input(/region for task row 1/i).value).toBe("Europe");
+    fireEvent.click(button(/^APAC$/));
+    expect(screen.getByText(/no tasks recorded for apac/i)).toBeTruthy();
+  });
+
+  it("says a region without a study falls back rather than inheriting a neighbour", () => {
+    withRegions();
+    fireEvent.click(button(/^APAC$/));
+    expect(screen.getByText(/falls back to the portfolio-wide figure/i)).toBeTruthy();
+  });
+
+  it("shows the weighted average, not a plain average of the task times", () => {
+    withRegions();
+    fireEvent.click(button(/^Europe$/));
+
+    fireEvent.click(button(/add a task row/i));
+    fireEvent.change(input(/minutes for task row 1/i), { target: { value: "30" } });
+    fireEvent.change(input(/volume for task row 1/i), { target: { value: "60000" } });
+
+    fireEvent.click(button(/add a task row/i));
+    fireEvent.change(input(/minutes for task row 2/i), { target: { value: "10" } });
+    fireEvent.change(input(/volume for task row 2/i), { target: { value: "40000" } });
+
+    // A plain average would be 20.0. Weighted by volume it is 22.0, and the difference
+    // is the whole reason a study beats an asserted figure.
+    expect(screen.getByText("22.0 min")).toBeTruthy();
+  });
+
+  it("reports coverage against the register and offers to reconcile it", () => {
+    withRegions();
+    goToBatch(/workload & demand/i);
+    fireEvent.change(input(/annual volume for europe/i), { target: { value: "250000" } });
+
+    goToBatch(/time study/i);
+    fireEvent.click(button(/^Europe$/));
+    fireEvent.click(button(/add a task row/i));
+    fireEvent.change(input(/minutes for task row 1/i), { target: { value: "30" } });
+    fireEvent.change(input(/volume for task row 1/i), { target: { value: "100000" } });
+
+    // 100,000 studied against 250,000 registered.
+    expect(screen.getByText("40%")).toBeTruthy();
+    fireEvent.click(button(/set europe/i));
+
+    goToBatch(/workload & demand/i);
+    fireEvent.blur(input(/annual volume for europe/i));
+    expect(input(/annual volume for europe/i).value).toBe("100000");
+  });
+});
+
+describe("skipping a section", () => {
+  it("marks the time study not applicable and drops it from the count", () => {
+    mount();
+    goToBatch(/time study/i);
+    fireEvent.click(button(/not applicable/i));
+
+    expect(screen.getByText(/is marked not applicable/i)).toBeTruthy();
+    // The rail entry reads "skipped" and "not applicable" rather than a progress count.
+    const entry = within(rail()).getByRole("button", { name: /time study/i });
+    expect(entry.textContent).toContain("skipped");
+    expect(entry.textContent).toContain("not applicable");
+  });
+
+  it("can be taken back", () => {
+    mount();
+    goToBatch(/time study/i);
+    fireEvent.click(button(/not applicable/i));
+    fireEvent.click(button(/include this section/i));
+    expect(screen.getByRole("heading", { name: /^time study$/i })).toBeTruthy();
+  });
+
+  it("refuses to skip a section the case cannot do without, and says which answers", () => {
+    mount();
+    // Company carries three required answers, so there is no skip control at all —
+    // only an explanation of why.
+    expect(screen.queryByRole("button", { name: /not applicable/i })).toBeNull();
+    expect(screen.getByText(/cannot be skipped/i)).toBeTruthy();
+  });
+
+  it("skipping the study stops it being the active handle-time source", () => {
+    mount();
+    goToBatch(/workload & demand/i);
+    fireEvent.click(button(/^Time Study$/));
+    expect(button(/^Time Study$/).getAttribute("aria-pressed")).toBe("true");
+
+    goToBatch(/time study/i);
+    fireEvent.click(button(/not applicable/i));
+
+    // Otherwise the model keeps reading a table the user has just declared irrelevant.
+    goToBatch(/workload & demand/i);
+    expect(button(/^Manual$/).getAttribute("aria-pressed")).toBe("true");
+  });
+});

@@ -25,7 +25,7 @@ import {
 } from "react";
 
 import { createBlankCase } from "../lib/case-defaults";
-import { readiness, type Readiness } from "../lib/case-questions";
+import { isSkippable, readiness, type BatchId, type Readiness } from "../lib/case-questions";
 import { caseReducer, type CaseAction } from "../lib/case-reducer";
 import { createSampleCase } from "../lib/sample-case";
 import type { Case } from "../lib/engine/types";
@@ -37,6 +37,12 @@ interface Persisted {
   case: Case;
   /** Whether the user has pressed Generate, so a reload lands where they left off. */
   generated: boolean;
+  /**
+   * Batches marked not-applicable. Kept beside the case rather than inside it: it is a
+   * statement about the interview, not about the model, and it must not travel into an
+   * exported workbook as though it were an assumption.
+   */
+  skipped?: BatchId[];
 }
 
 const storageKey = (projectId: string) => `ssa.business-case.${projectId}.v${STORAGE_VERSION}`;
@@ -80,6 +86,10 @@ export interface CaseStore {
   loadSample: () => void;
   /** Bumped whenever the case is replaced wholesale, so inputs re-mount. */
   revision: number;
+  /** Batches the user has marked not-applicable. */
+  skipped: ReadonlySet<BatchId>;
+  /** Mark a batch not-applicable, or take it back. Ignored for batches that carry a required answer. */
+  toggleSkip: (batch: BatchId) => void;
 }
 
 const CaseStoreContext = createContext<CaseStore | null>(null);
@@ -107,24 +117,48 @@ export function CaseStoreProvider({
   );
   const [generated, setGenerated] = useState(draft?.generated ?? false);
   const [revision, setRevision] = useState(0);
+  const [skipped, setSkipped] = useState<ReadonlySet<BatchId>>(
+    () => new Set(draft?.skipped ?? []),
+  );
 
   const value = useMemo<CaseStore>(() => {
     const replace = (next: Case, isGenerated: boolean) => {
       dispatch({ type: "case/replace", case: next });
       setGenerated(isGenerated);
+      setSkipped(new Set());
       setRevision((r) => r + 1);
     };
+
+    const toggleSkip = (batch: BatchId) => {
+      // Guarded here as well as in the UI. A batch carrying a required answer cannot be
+      // skipped at all, so there is no state in which the model is generated without it.
+      if (!isSkippable(batch)) return;
+      setSkipped((current) => {
+        const next = new Set(current);
+        if (next.has(batch)) next.delete(batch);
+        else next.add(batch);
+        return next;
+      });
+      // Skipping the time study must also stop it being the active handle-time source,
+      // or the model would keep reading a table the user has just declared irrelevant.
+      if (batch === "timeStudy" && !skipped.has(batch)) {
+        dispatch({ type: "globals/setChoice", patch: { handleTimeSource: "Manual" } });
+      }
+    };
+
     return {
       workingCase,
       dispatch,
-      readiness: readiness(workingCase),
+      readiness: readiness(workingCase, skipped),
       generated,
       generate: () => setGenerated(true),
       reset: () => replace(createBlankCase(asOfDate), false),
       loadSample: () => replace(createSampleCase(), true),
       revision,
+      skipped,
+      toggleSkip,
     };
-  }, [workingCase, generated, revision, asOfDate]);
+  }, [workingCase, generated, revision, asOfDate, skipped]);
 
   /* --------------------------- persistence ------------------------------- */
 
@@ -137,14 +171,19 @@ export function CaseStoreProvider({
       hydrated.current = true;
       return;
     }
-    const payload: Persisted = { version: STORAGE_VERSION, case: workingCase, generated };
+    const payload: Persisted = {
+      version: STORAGE_VERSION,
+      case: workingCase,
+      generated,
+      skipped: [...skipped],
+    };
     try {
       window.localStorage.setItem(storageKey(projectId), JSON.stringify(payload));
     } catch {
       // Quota or a private-browsing restriction. The in-memory case is unaffected,
       // and silently losing persistence is better than breaking the form.
     }
-  }, [workingCase, generated, projectId]);
+  }, [workingCase, generated, skipped, projectId]);
 
   return <CaseStoreContext.Provider value={value}>{children}</CaseStoreContext.Provider>;
 }

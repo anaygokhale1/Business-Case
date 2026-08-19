@@ -53,6 +53,18 @@ export interface Batch {
   blurb: string;
 }
 
+/**
+ * Whether a batch can be marked not-applicable.
+ *
+ * Derived, not declared: a batch is skippable exactly when nothing in it is required.
+ * So if a question's requiredness changes, the skip affordance follows automatically
+ * and cannot drift out of step with it. Batches that carry a required answer are not
+ * skippable, and the form says which answers are the reason rather than showing a
+ * disabled button with no explanation.
+ */
+export const isSkippable = (id: BatchId): boolean =>
+  !QUESTIONS.some((q) => q.batch === id && q.required);
+
 export const BATCHES: readonly Batch[] = [
   {
     id: "company",
@@ -365,15 +377,26 @@ export interface BatchProgress {
   applicable: number;
   /** Required questions still empty. */
   blocking: Question[];
+  /** Whether this batch could be marked not-applicable. */
+  skippable: boolean;
+  /** Whether the user has marked it not-applicable. */
+  skipped: boolean;
 }
 
-export const batchProgress = (c: Case): BatchProgress[] =>
+export const batchProgress = (
+  c: Case,
+  skipped: ReadonlySet<BatchId> = new Set(),
+): BatchProgress[] =>
   BATCHES.map((batch) => {
     const questions = QUESTIONS.filter((q) => q.batch === batch.id).map((question) => ({
       question,
       status: question.status(c),
     }));
-    const applicable = questions.filter((q) => q.status !== "n/a");
+    const isSkipped = skipped.has(batch.id);
+    // A skipped batch contributes nothing to the denominator, so the progress figure
+    // reads against what the user has actually taken on rather than against every
+    // question the interview could ask.
+    const applicable = isSkipped ? [] : questions.filter((q) => q.status !== "n/a");
     return {
       batch,
       questions,
@@ -382,6 +405,8 @@ export const batchProgress = (c: Case): BatchProgress[] =>
       blocking: applicable
         .filter((q) => q.question.required && q.status === "empty")
         .map((q) => q.question),
+      skippable: isSkippable(batch.id),
+      skipped: isSkipped,
     };
   });
 
@@ -395,8 +420,11 @@ export interface Readiness {
   applicable: number;
 }
 
-export const readiness = (c: Case): Readiness => {
-  const batches = batchProgress(c);
+export const readiness = (
+  c: Case,
+  skipped: ReadonlySet<BatchId> = new Set(),
+): Readiness => {
+  const batches = batchProgress(c, skipped);
   const blocking = batches.flatMap((b) => b.blocking);
   return {
     canGenerate: blocking.length === 0,

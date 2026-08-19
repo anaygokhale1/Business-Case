@@ -163,6 +163,14 @@ export function BatchWorkload({
         </div>
 
         <Note>
+          <strong>Handle time can come from two places.</strong> Either you assert one average here,
+          or the Time Study step derives it from task-level times and volumes — one figure you
+          assert, or a volume-weighted average of the tasks. The study adds no demand of its own;
+          annual volume above is still what the case is sized against. If you already have a
+          measured average, the Time Study step can be marked not applicable.
+        </Note>
+
+        <Note>
           Required FTE for a row is <strong>volume &times; (1 + uplift) &times; handle time</strong>,
           divided by that row&rsquo;s own effective productive minutes. Handle time and uplift left
           blank inherit the global figure above; a row that measures its own overrides it. The

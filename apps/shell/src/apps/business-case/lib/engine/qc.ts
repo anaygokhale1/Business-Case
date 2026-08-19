@@ -19,7 +19,12 @@
 import { isMissing } from "./alg";
 import { computeBlendedCost, flattenCostVectors, portfolioTotals } from "./aggregate";
 import type { Ctx } from "./drivers";
-import { buildCtx } from "./drivers";
+import {
+  buildCtx,
+  regionsWithStudy,
+  studyRowsForRegion,
+  studyVolume,
+} from "./drivers";
 import { computeUnit } from "./identity";
 import type { Case, ScenarioKey, UnitResult } from "./types";
 import { SCENARIO_KEYS, SENTINEL } from "./types";
@@ -265,6 +270,53 @@ export const checkInvariants = (
       message: `${missingVolume.length} of ${c.units.length} unit(s) have no volume, so they contribute no required FTE. Any portfolio total therefore covers ${c.units.length - missingVolume.length} of ${c.units.length} units.`,
       actual: missingVolume.map((u) => u.id).join(", "),
     });
+  }
+
+  /* ---------------------------------------------------------------------- */
+  /* G25 — a time study must reconcile to the register it is used with       */
+  /* ---------------------------------------------------------------------- */
+
+  if (c.globals.handleTimeSource === "Time Study") {
+    for (const region of regionsWithStudy(c.timeStudy)) {
+      const rows = studyRowsForRegion(c.timeStudy, region);
+      const studied = studyVolume(rows);
+      const registered = c.units
+        .filter((u) => u.region === region)
+        .reduce((acc, u) => acc + (typeof u.volume === "number" ? u.volume : 0), 0);
+
+      if (studied === 0 || registered === 0) continue;
+
+      // Sigma(task volume x task minutes) is identically equal to
+      // (total volume) x (weighted average handle time). So a study whose volumes do
+      // not tie to the register is not a rounding difference — it means the study
+      // covers a different population than the case is sizing, and the weighted
+      // average is therefore an average over the wrong mix of tasks.
+      const ratio = studied / registered;
+      if (Math.abs(ratio - 1) > 0.02) {
+        v.push({
+          id: "G25",
+          severity: "warn",
+          message: `${region}: the time study covers ${Math.round(ratio * 100)}% of the volume in the register (${Math.round(studied).toLocaleString("en-US")} studied vs ${Math.round(registered).toLocaleString("en-US")} registered). The weighted average is only the right handle time if the study covers the same work — otherwise it is weighted by the wrong task mix.`,
+          path: `timeStudy.${region}`,
+          expected: registered,
+          actual: studied,
+        });
+      }
+    }
+
+    const unstudied = c.units
+      .map((u) => u.region)
+      .filter((region, i, all) => all.indexOf(region) === i)
+      .filter((region) => !regionsWithStudy(c.timeStudy).includes(region));
+
+    if (unstudied.length > 0 && regionsWithStudy(c.timeStudy).length > 0) {
+      v.push({
+        id: "G25",
+        severity: "warn",
+        message: `${unstudied.length} region(s) have no study of their own and fall back to the portfolio figure: ${unstudied.join(", ")}. Worth stating explicitly — a study measured in one region is not evidence about another.`,
+        actual: unstudied.join(", "),
+      });
+    }
   }
 
   /* ---------------------------------------------------------------------- */

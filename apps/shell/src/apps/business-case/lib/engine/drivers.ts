@@ -42,6 +42,9 @@ export const INHERITABLE_DRIVERS: readonly InheritableDriver[] = [
 const resolveValue = (raw: Driver | undefined, fallback: number): Resolved => {
   if (raw === SENTINEL) return { value: MISSING, origin: "missing" };
   if (typeof raw === "number") return { value: raw, origin: "own" };
+  // Inheriting a value that does not exist is still missing. Reporting "inherited"
+  // here would badge a blank cell as though it had successfully picked something up.
+  if (Number.isNaN(fallback)) return { value: MISSING, origin: "missing" };
   return { value: fallback, origin: "inherited" };
 };
 
@@ -58,6 +61,45 @@ export const weightedAverageHandleTime = (rows: TimeStudyRow[]): number => {
   const weighted = rows.reduce((acc, r) => acc + r.minutes * r.volume, 0);
   return weighted / totalVolume;
 };
+
+/** Rows measured in a given region. */
+export const studyRowsForRegion = (rows: TimeStudyRow[], region: string): TimeStudyRow[] =>
+  rows.filter((r) => r.region === region);
+
+/** Rows with no region — the portfolio-wide fallback. */
+export const studyRowsPortfolio = (rows: TimeStudyRow[]): TimeStudyRow[] =>
+  rows.filter((r) => r.region === undefined);
+
+/** Every region that has a study of its own. */
+export const regionsWithStudy = (rows: TimeStudyRow[]): string[] => {
+  const seen: string[] = [];
+  for (const r of rows) {
+    if (r.region !== undefined && !seen.includes(r.region)) seen.push(r.region);
+  }
+  return seen;
+};
+
+/**
+ * The per-region weighted average, for regions that have their own study rows.
+ *
+ * A region absent from this map falls back to the portfolio study and then to the
+ * manual figure. Precomputed into the context rather than derived per unit, so the
+ * cost is paid once per recompute and not once per row.
+ */
+export const handleTimeByRegion = (rows: TimeStudyRow[]): Record<string, number> => {
+  const out: Record<string, number> = {};
+  for (const region of regionsWithStudy(rows)) {
+    const avg = weightedAverageHandleTime(studyRowsForRegion(rows, region));
+    // A region whose rows carry no volume gets no entry at all, rather than a NaN
+    // that would then have to be distinguished from a genuine sentinel downstream.
+    if (!Number.isNaN(avg)) out[region] = avg;
+  }
+  return out;
+};
+
+/** Total task volume in a study scope. Used to reconcile the study against the register. */
+export const studyVolume = (rows: TimeStudyRow[]): number =>
+  rows.reduce((acc, r) => acc + r.volume, 0);
 
 export interface RoleIndex {
   frontLine: string[];
@@ -86,32 +128,34 @@ export const resolveGlobals = (c: Case): ResolvedGlobals => {
   const { globals, timeStudy } = c;
 
   if (globals.handleTimeSource === "Time Study") {
-    const weighted = weightedAverageHandleTime(timeStudy);
-    // An empty study falls back to the manual entry rather than to the sentinel:
-    // the toggle should not be able to break a model that has a manual value.
-    const usable = Number.isNaN(weighted) ? globals.handleTimeMinutes : weighted;
-    return {
-      ...globals,
-      activeHandleTimeMinutes: usable,
-      activeHandleTimeOrigin: Number.isNaN(weighted) ? "default" : "input",
-    };
+    // Portfolio rows ONLY — never all rows. A study measured in one region must not
+    // become the figure every other region inherits: that is how a real difference in
+    // how work is done disappears, and the resulting number looks entirely plausible.
+    const weighted = weightedAverageHandleTime(studyRowsPortfolio(timeStudy));
+    if (!Number.isNaN(weighted)) {
+      return { ...globals, activeHandleTimeMinutes: weighted, activeHandleTimeOrigin: "input" };
+    }
+
+    // No portfolio rows. The manual entry is the fallback if there is one; otherwise
+    // the sentinel, because there is genuinely no answer for a region that did not
+    // measure and has nothing to inherit. G21 — a 0 here would make required FTE 0
+    // and report the entire current headcount as surplus.
+    return globals.handleTimeMinutes > 0
+      ? {
+          ...globals,
+          activeHandleTimeMinutes: globals.handleTimeMinutes,
+          activeHandleTimeOrigin: "default",
+        }
+      : { ...globals, activeHandleTimeMinutes: MISSING, activeHandleTimeOrigin: "missing" };
   }
 
   return {
     ...globals,
-    activeHandleTimeMinutes: globals.handleTimeMinutes,
-    activeHandleTimeOrigin: "input",
+    activeHandleTimeMinutes: globals.handleTimeMinutes > 0 ? globals.handleTimeMinutes : MISSING,
+    activeHandleTimeOrigin: globals.handleTimeMinutes > 0 ? "input" : "missing",
   };
 };
 
-/**
- * Evaluation context for a single unit.
- *
- * G23 — note what is NOT here: the unit array. A per-unit computation takes this
- * context and one unit, so it structurally cannot read a sibling row. That is the
- * bug class the AIG workbook shipped, where four register columns were joined to
- * an arbitrary other building because relative row references survived a sort.
- */
 /**
  * Q29 — apply the implementation-cost mode.
  *
@@ -133,27 +177,62 @@ export const effectiveCostInputs = (
   }
 };
 
+/**
+ * Evaluation context for a single unit.
+ *
+ * G23 — note what is NOT here: the unit array. A per-unit computation takes this
+ * context and one unit, so it structurally cannot read a sibling row. That is the
+ * bug class the AIG workbook shipped, where four register columns were joined to
+ * an arbitrary other building because relative row references survived a sort.
+ *
+ * `handleTimeByRegion` does not breach that. It is derived from the time study, not
+ * from other units, so it is context in the same sense the globals are — a unit
+ * still cannot see a sibling row through it.
+ */
 export interface Ctx {
   globals: ResolvedGlobals;
   roles: RoleIndex;
+  /** Region -> weighted average from that region's own study rows. */
+  handleTimeByRegion: Record<string, number>;
 }
 
 export const buildCtx = (c: Case): Ctx => ({
   globals: resolveGlobals(c),
   roles: indexRoles(c.roles),
+  // Only consulted when the source is Time Study. Keeping the map empty otherwise
+  // means the Manual/Time Study toggle has exactly one effect, in one place.
+  handleTimeByRegion:
+    c.globals.handleTimeSource === "Time Study" ? handleTimeByRegion(c.timeStudy) : {},
 });
 
-/** The global fallback for each inheritable driver. */
-const globalFallback = (g: ResolvedGlobals, key: InheritableDriver): number => {
+/**
+ * The fallback for a driver the unit does not supply.
+ *
+ * Handle time has one more layer than the others, and the order matters:
+ *
+ *   this region's own study  ->  the portfolio study  ->  the manual figure
+ *
+ * A region that measured its own tasks uses its own number. A region that did not
+ * falls back to the portfolio study, and to the manual entry if there is none. What
+ * must never happen is one region's study being applied to another as though it were
+ * a global truth — that is how a real difference in how work is done vanishes.
+ */
+const driverFallback = (
+  ctx: Ctx,
+  unit: Unit,
+  key: InheritableDriver,
+): number => {
   switch (key) {
-    case "handleTimeMinutes":
-      return g.activeHandleTimeMinutes;
+    case "handleTimeMinutes": {
+      const regional = ctx.handleTimeByRegion[unit.region];
+      return regional === undefined ? ctx.globals.activeHandleTimeMinutes : regional;
+    }
     case "workingHoursPerYear":
-      return g.workingHoursPerYear;
+      return ctx.globals.workingHoursPerYear;
     case "utilisationPct":
-      return g.utilisationPct;
+      return ctx.globals.utilisationPct;
     case "upliftPct":
-      return g.upliftPct;
+      return ctx.globals.upliftPct;
   }
 };
 
@@ -161,7 +240,7 @@ export const resolveDriver = (
   unit: Unit,
   ctx: Ctx,
   key: InheritableDriver,
-): Resolved => resolveValue(unit[key], globalFallback(ctx.globals, key));
+): Resolved => resolveValue(unit[key], driverFallback(ctx, unit, key));
 
 /** Volume is required, so it has no global fallback — absent means missing. */
 export const resolveVolume = (unit: Unit): Resolved => {
