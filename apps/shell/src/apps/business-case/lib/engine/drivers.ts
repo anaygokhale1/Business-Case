@@ -112,6 +112,27 @@ export const resolveGlobals = (c: Case): ResolvedGlobals => {
  * bug class the AIG workbook shipped, where four register columns were joined to
  * an arbitrary other building because relative row references survived a sort.
  */
+/**
+ * Q29 — apply the implementation-cost mode.
+ *
+ * The mode wins over the individual figures. If a user models consulting cost, then
+ * switches to "Severance only", the consulting number stays in the input box so it
+ * is not lost — but it must not reach a total. Resolving that here, once, is what
+ * stops each consumer deciding for itself.
+ */
+export const effectiveCostInputs = (
+  g: Globals,
+): { severanceWeeks: number; consultingCost: number } => {
+  switch (g.implementationCosts) {
+    case "None":
+      return { severanceWeeks: 0, consultingCost: 0 };
+    case "Severance only":
+      return { severanceWeeks: g.severanceWeeks, consultingCost: 0 };
+    case "Severance + consulting":
+      return { severanceWeeks: g.severanceWeeks, consultingCost: g.consultingCost };
+  }
+};
+
 export interface Ctx {
   globals: ResolvedGlobals;
   roles: RoleIndex;

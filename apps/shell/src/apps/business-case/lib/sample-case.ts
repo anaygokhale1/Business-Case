@@ -27,6 +27,7 @@ const GLOBALS: Globals = {
   spanOfControl: 8,
   severanceWeeks: 8,
   severanceTiming: "Lump sum at exit",
+  implementationCosts: "Severance + consulting",
   horizonYears: 3,
   consultingCost: 250_000,
   noticeMonths: 2,
@@ -126,6 +127,7 @@ export const createSampleCase = (): Case => ({
     initiativeTitle: "Claims Operations Optimisation",
     preparedBy: "Demo User",
     modelDate: "2026-08-18",
+    workloadUnitName: "Claims",
     // G20 — fixed, never read from the clock. A model whose numbers move overnight
     // cannot be signed off, and it makes regression testing impossible.
     asOfDate: "2026-08-18",

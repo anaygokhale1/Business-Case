@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 
+import { useCaseStore } from "../hooks/use-case-store";
 import { isMissing } from "../lib/engine/alg";
 import { checkInvariants } from "../lib/engine/qc";
 import { resolve, resolveAll } from "../lib/engine/scenario";
@@ -9,7 +10,6 @@ import type { ScenarioKey } from "../lib/engine/types";
 import { SCENARIO_KEYS } from "../lib/engine/types";
 import { count, currency, currencyCompact, fte, minutes, months, pct } from "../lib/format";
 import type { RegisterColumn, RegisterRow } from "../lib/register-sort";
-import { createSampleCase } from "../lib/sample-case";
 import { useRegisterSort } from "../hooks/use-register-sort";
 
 const SCENARIO_LABEL: Record<ScenarioKey, string> = {
@@ -42,9 +42,10 @@ const originTitle = (origin: string) =>
       : "Inherited from the global assumption";
 
 export function BusinessCaseWorkspace({ projectId }: { projectId: string }) {
-  // The working case is client state. Nothing is written to the database until the
-  // user explicitly saves, so a case in progress never leaves the machine.
-  const [businessCase] = useState(createSampleCase);
+  // The case comes from the store the input form writes to, so the output is a view
+  // of the answers rather than a second copy of them. Nothing is written to the
+  // database until the user explicitly saves.
+  const { workingCase: businessCase } = useCaseStore();
   const [scenario, setScenario] = useState<ScenarioKey>("base");
 
   const all = useMemo(() => resolveAll(businessCase), [businessCase]);

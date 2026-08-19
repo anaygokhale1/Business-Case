@@ -18,6 +18,7 @@ export const DEFAULT_GLOBALS: Globals = {
   spanOfControl: 8,
   severanceWeeks: 8,
   severanceTiming: "Lump sum at exit",
+  implementationCosts: "Severance + consulting",
   horizonYears: 3,
   consultingCost: 250_000,
   noticeMonths: 2,
@@ -54,6 +55,7 @@ export const makeCase = (units: Unit[], globals: Partial<Globals> = {}): Case =>
     modelDate: "2026-01-15",
     // G20 — fixed, never Date.now(). Golden-file regression is impossible otherwise.
     asOfDate: "2026-01-15",
+    workloadUnitName: "Claims",
   },
   globals: { ...structuredClone(DEFAULT_GLOBALS), ...globals },
   scenarios: {

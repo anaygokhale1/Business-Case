@@ -10,7 +10,7 @@
 
 import { FastAlg, MISSING, isMissing } from "./alg";
 import { computeBlendedCost, portfolioTotals, type PortfolioTotals } from "./aggregate";
-import { buildCtx, type Ctx } from "./drivers";
+import { buildCtx, effectiveCostInputs, type Ctx } from "./drivers";
 import {
   grossSavings,
   horizonGross,
@@ -84,6 +84,9 @@ export const resolve = (c: Case, scenario: ScenarioKey, ctx?: Ctx): ScenarioResu
     c.globals.spanOfControl,
   );
 
+  // Q29 — the cost mode is applied once, here, before any formula sees the figures.
+  const costs = effectiveCostInputs(c.globals);
+
   const inputs = liftKpiInputs(FastAlg, {
     currentFrontLine: totals.currentFrontLine,
     hcReductionPct,
@@ -91,8 +94,8 @@ export const resolve = (c: Case, scenario: ScenarioKey, ctx?: Ctx): ScenarioResu
     blendedFrontLineCost: frontLine.value,
     blendedManagerCost: isMissing(manager.value) ? 0 : manager.value,
     blendedAllIn: allIn.value,
-    severanceWeeks: c.globals.severanceWeeks,
-    consultingCost: c.globals.consultingCost,
+    severanceWeeks: costs.severanceWeeks,
+    consultingCost: costs.consultingCost,
     horizonYears: c.globals.horizonYears,
   });
 
@@ -112,7 +115,7 @@ export const resolve = (c: Case, scenario: ScenarioKey, ctx?: Ctx): ScenarioResu
     totalReduction: totalReduction(FastAlg, inputs),
     grossSavings: gross,
     severance: severance(FastAlg, inputs),
-    consultingCost: c.globals.consultingCost,
+    consultingCost: costs.consultingCost,
     oneTimeCost: oneTimeCost(FastAlg, inputs),
     year1Net: year1Net(FastAlg, inputs),
     // Guarded: no savings means the cost never pays back, which must read as
