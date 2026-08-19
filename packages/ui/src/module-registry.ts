@@ -11,7 +11,11 @@ import type { ProjectModuleKey } from "@ssa/project-context/project-portfolio";
 // To add a module: add its key to ModuleKey and a MODULE_REGISTRY entry here,
 // then a PROJECT_MODULE_NAV row in route-groups.ts and the camelCase key in
 // packages/project-context/src/project-portfolio.ts. See the README.
-export type ModuleKey = "project-overview" | "sample-tracker" | "project-members";
+export type ModuleKey =
+  | "project-overview"
+  | "sample-tracker"
+  | "business-case"
+  | "project-members";
 
 export type ModuleEntry = {
   key: ModuleKey;
@@ -41,6 +45,16 @@ export const MODULE_REGISTRY: ModuleEntry[] = [
     href: (slug) => `/apps/sample-tracker/projects/${slug}/sample-tracker`,
     match: /^(?:\/apps\/sample-tracker)?\/projects\/([^/]+)\/sample-tracker(?:\/|$)/,
     requiresModule: "sampleTracker",
+    external: false
+  },
+  {
+    key: "business-case",
+    // In-shell, same-origin module mounted under (app)/apps/business-case/.
+    // Same optional-prefix shape as sample-tracker so both the full path and a
+    // stripped path resolve, anchored to the /business-case segment.
+    href: (slug) => `/apps/business-case/projects/${slug}/business-case`,
+    match: /^(?:\/apps\/business-case)?\/projects\/([^/]+)\/business-case(?:\/|$)/,
+    requiresModule: "businessCase",
     external: false
   },
   {

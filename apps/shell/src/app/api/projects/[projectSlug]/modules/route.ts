@@ -10,7 +10,7 @@ import { requireProjectAccess } from "@ssa/server/access-service";
 // When you add a module, extend the enum and moduleLabel() below so the toggle
 // recognizes it. This mirrors the real route's shape.
 const patchSchema = z.object({
-  moduleKey: z.enum(["sampleTracker"]),
+  moduleKey: z.enum(["sampleTracker", "businessCase"]),
   enabled: z.boolean().optional(),
   externalAccess: z.boolean().optional()
 });
@@ -19,6 +19,8 @@ function moduleLabel(key: z.infer<typeof patchSchema>["moduleKey"]): string {
   switch (key) {
     case "sampleTracker":
       return "Sample Tracker";
+    case "businessCase":
+      return "Business Case";
     default:
       return key;
   }

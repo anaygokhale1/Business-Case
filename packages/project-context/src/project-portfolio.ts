@@ -8,7 +8,7 @@
 // PROJECT_MODULE_NAV (packages/ui/src/route-groups.ts). See the README.
 
 // camelCase per-project module key (the "enabled?" toggle namespace).
-export type ProjectModuleKey = "sampleTracker";
+export type ProjectModuleKey = "sampleTracker" | "businessCase";
 
 export type ProjectMember = {
   userId?: string;
@@ -58,6 +58,15 @@ export function createDefaultModules(): ProjectModuleState[] {
       completion: "",
       progressLabel: "",
       href: "sample-tracker"
+    },
+    {
+      key: "businessCase",
+      label: "Business Case",
+      enabled: false,
+      externalAccess: false,
+      completion: "",
+      progressLabel: "",
+      href: "business-case"
     }
   ];
 }
@@ -90,6 +99,15 @@ export const defaultProjects: PortfolioProject[] = [
         completion: "",
         progressLabel: "",
         href: "sample-tracker"
+      },
+      {
+        key: "businessCase",
+        label: "Business Case",
+        enabled: true,
+        externalAccess: false,
+        completion: "",
+        progressLabel: "",
+        href: "business-case"
       }
     ],
     members: [
@@ -144,6 +162,15 @@ export const defaultProjects: PortfolioProject[] = [
         completion: "",
         progressLabel: "",
         href: "sample-tracker"
+      },
+      {
+        key: "businessCase",
+        label: "Business Case",
+        enabled: false,
+        externalAccess: false,
+        completion: "",
+        progressLabel: "",
+        href: "business-case"
       }
     ],
     members: [

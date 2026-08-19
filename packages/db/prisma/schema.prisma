@@ -29,3 +29,29 @@ model SampleItem {
 
   @@index([projectSlug])
 }
+
+// A saved business case. The module is local-first: the working case lives in the
+// browser and is written here only when the user explicitly saves, so a case in
+// progress never leaves the machine.
+//
+// `payload` holds the whole case.workforce.v2 document as JSON text rather than a
+// column per assumption. The case is a single versioned document that the engine
+// validates on read, and its shape changes as the model grows — normalising it
+// would mean a migration every time a driver is added, with no query benefit
+// because nothing ever filters on an individual assumption.
+//
+// Stored as String, not Json: the template's guidance is to stay on SQLite's
+// lowest common denominator so a model carries over to Postgres unchanged.
+model BusinessCase {
+  id          String   @id @default(cuid())
+  projectSlug String
+  name        String
+  payload     String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Saving under an existing name updates that case rather than accumulating
+  // near-duplicates the user cannot tell apart.
+  @@unique([projectSlug, name])
+  @@index([projectSlug])
+}

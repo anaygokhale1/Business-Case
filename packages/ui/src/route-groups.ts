@@ -26,6 +26,7 @@ const PROJECT_MODULE_NAV: Array<{
 }> = [
   { moduleKey: "project-overview", navKey: "project-overview", label: "Overview" },
   { moduleKey: "sample-tracker", navKey: "sample-tracker", label: "Sample Tracker" },
+  { moduleKey: "business-case", navKey: "business-case", label: "Business Case" },
   { moduleKey: "project-members", navKey: "project-members-users", label: "Project Setup" }
 ];
 
