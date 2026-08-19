@@ -90,21 +90,43 @@ describe(`perf budget — ${UNIT_COUNT} units x ${SCENARIO_KEYS.length} scenario
   });
 
   it("scales linearly, not quadratically, in unit count", () => {
-    const small = makeCase(buildLargeCase().units.slice(0, 100));
-    const large = buildLargeCase();
+    const all = buildLargeCase().units;
+    const small = makeCase(all.slice(0, 100));
+    const large = makeCase(all.slice(0, 400));
 
-    const time = (c: ReturnType<typeof buildLargeCase>) => {
-      for (let i = 0; i < 3; i += 1) fullRecompute(c);
-      const t0 = performance.now();
+    // Take the MINIMUM across many runs, not the mean. Minimum is the standard
+    // robust estimator for a microbenchmark: every source of noise here — GC
+    // pauses, the OS scheduler, a CI runner's neighbours — only ever makes a run
+    // slower, never faster, so the fastest run is the closest estimate of the real
+    // cost. A mean of sub-millisecond timings is dominated by whichever GC pause
+    // happened to land inside the window, which is what made an earlier version of
+    // this assertion flaky.
+    const perUnitCost = (c: ReturnType<typeof buildLargeCase>) => {
       for (let i = 0; i < 5; i += 1) fullRecompute(c);
-      return (performance.now() - t0) / 5;
+      let best = Infinity;
+      for (let i = 0; i < 15; i += 1) {
+        const t0 = performance.now();
+        fullRecompute(c);
+        best = Math.min(best, performance.now() - t0);
+      }
+      return best / c.units.length;
     };
 
-    const ratio = time(large) / Math.max(time(small), 0.01);
+    const smallCost = perUnitCost(small);
+    const largeCost = perUnitCost(large);
+    const ratio = largeCost / smallCost;
 
-    // 5x the units should cost roughly 5x. Quadratic growth would be ~25x. The bound
-    // is loose because the absolute times are sub-millisecond and therefore noisy —
-    // it is the shape of the growth being asserted, not the constant.
-    expect(ratio).toBeLessThan(12);
+    // eslint-disable-next-line no-console
+    console.log(
+      `  per-unit cost: 100 units ${(smallCost * 1000).toFixed(2)}us, 400 units ${(largeCost * 1000).toFixed(2)}us, ratio ${ratio.toFixed(2)}x`,
+    );
+
+    // Asserting on cost PER UNIT makes the expected value independent of size:
+    // linear work gives a ratio near 1, quadratic work at 4x the rows gives 4.
+    // A threshold of 3 sits well clear of both. Some rise above 1 is legitimate —
+    // a larger working set spills out of cache — so this is not a drift detector,
+    // it is a guard against someone adding a loop over all units inside a per-unit
+    // computation.
+    expect(ratio).toBeLessThan(3);
   });
 });
