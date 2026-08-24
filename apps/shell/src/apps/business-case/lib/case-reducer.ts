@@ -15,7 +15,8 @@
  *     round-trip, which is why `exactOptionalPropertyTypes` stays on.
  */
 
-import { applyStudy, applyVolumes } from "./capacity-populate";
+import { applyPreset, applyStudy, applyVolumes } from "./capacity-populate";
+import type { CapacityPreset } from "./case-presets";
 import { benchmarkFor, STANDARD_PHASE_WEIGHTS, SUGGESTED_SCENARIOS } from "./case-defaults";
 import type { InheritableDriver } from "./engine/drivers";
 import { normaliseRole } from "./engine/process-study";
@@ -89,7 +90,13 @@ export type CaseAction =
   | { type: "capacity/setRoleParam"; role: string; patch: Partial<RoleCapacity> }
   | { type: "capacity/setExcludedRowIds"; rowIds: string[] }
   | { type: "capacity/clear" }
+  | { type: "capacity/applyPreset"; preset: CapacityPreset }
+  | { type: "capacity/setNumber"; field: CapacityNumber; value: number }
+  | { type: "capacity/setCurrency"; currency: string }
   | { type: "model/set"; model: CaseModel };
+
+/** Capacity fields the form edits as free numbers. */
+export type CapacityNumber = "redeploymentRate" | "recruitmentCostPct";
 
 /** Globals the form edits as free numbers. Enums go through `globals/setChoice`. */
 export type NumericGlobal =
@@ -524,6 +531,21 @@ export function caseReducer(state: Case, action: CaseAction): Case {
       const next = { ...state, model: "reduction" as CaseModel };
       delete next.capacity;
       return next;
+    }
+
+    case "capacity/applyPreset":
+      return applyPreset(state, action.preset);
+
+    case "capacity/setNumber": {
+      if (!state.capacity) return state;
+      return { ...state, capacity: { ...state.capacity, [action.field]: action.value } };
+    }
+
+    case "capacity/setCurrency": {
+      if (!state.capacity) return state;
+      // Recorded, never used to convert. A case that silently applied an FX rate would be
+      // stating a rate and a date nobody agreed to.
+      return { ...state, capacity: { ...state.capacity, currency: action.currency } };
     }
 
     case "model/set":

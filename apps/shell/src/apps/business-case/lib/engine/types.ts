@@ -246,6 +246,27 @@ export interface RoleCapacity {
    * staffed, because pretending someone does the work is the more dangerous error.
    */
   unassigned?: boolean;
+  /**
+   * Where this role sits — onshore, a hub, a named country.
+   *
+   * Descriptive, and load-bearing for the cost story: in a right-shift most of the saving
+   * comes from work moving somewhere cheaper, not from a cheaper grade doing the same work
+   * in the same place. Without the location on the role the two are indistinguishable in
+   * the output, and only one of them is a decision anyone can act on.
+   *
+   * One location per role. A role that genuinely exists in two places at two costs has to
+   * be two roles in the study, because a single role name carries no way to say which of
+   * its people performed a given step.
+   */
+  location?: string;
+  /**
+   * All-in annual cost of one FTE of this role, in this location.
+   *
+   * Absent means not yet supplied and the sentinel means known-missing. Either way the
+   * role's FTE change is still reported, and its cost impact is excluded from the total
+   * with the gap stated — never treated as zero, which would read as a role that is free.
+   */
+  annualCost?: Driver;
 }
 
 /** Transactions received for one (lob, transactionType). */
@@ -307,6 +328,21 @@ export interface CapacityBlock extends CapacityStudy {
    * default — G28 never removes a row on its own.
    */
   excludedRowIds: string[];
+  /**
+   * Share of a shrinking role's reduction that moves into a growing role rather than
+   * leaving. 0 means everyone displaced exits; 1 means nobody does.
+   *
+   * Stated explicitly rather than buried inside a net figure, because it is the assumption
+   * the one-time cost is most sensitive to and the first one a reader will challenge.
+   */
+  redeploymentRate: number;
+  /**
+   * Cost of filling a growing role that redeployment does not fill, as a share of that
+   * role's annual cost. Zero means recruitment cost is not being modelled.
+   */
+  recruitmentCostPct: number;
+  /** Currency the role costs are stated in, e.g. "EUR". Reported, never converted. */
+  currency: string;
   /** Where the numbers came from, for the audit trail. */
   source?: {
     studyFile?: string;

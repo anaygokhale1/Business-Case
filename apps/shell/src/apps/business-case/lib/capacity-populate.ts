@@ -12,6 +12,7 @@
  */
 
 import { DEFAULT_GLOBALS } from "./case-defaults";
+import type { CapacityPreset } from "./case-presets";
 import type {
   CapacityBlock,
   Case,
@@ -178,6 +179,9 @@ export const applyStudy = (
     excludedRowIds: (previous?.excludedRowIds ?? []).filter((id) =>
       study.rows.some((r) => r.id === id),
     ),
+    redeploymentRate: previous?.redeploymentRate ?? 0,
+    recruitmentCostPct: previous?.recruitmentCostPct ?? 0,
+    currency: previous?.currency ?? "USD",
     source: {
       ...(previous?.source ?? {}),
       ...(fileName ? { studyFile: fileName } : {}),
@@ -252,6 +256,9 @@ export const applyVolumes = (
     baseColumn: previous?.baseColumn ?? "current",
     targetColumn: previous?.targetColumn ?? "current",
     excludedRowIds: previous?.excludedRowIds ?? [],
+    redeploymentRate: previous?.redeploymentRate ?? 0,
+    recruitmentCostPct: previous?.recruitmentCostPct ?? 0,
+    currency: previous?.currency ?? "USD",
     source: {
       ...(previous?.source ?? {}),
       ...(fileName ? { volumesFile: fileName } : {}),
@@ -259,6 +266,78 @@ export const applyVolumes = (
     },
   };
   return { ...c, model: "capacity", capacity };
+};
+
+/**
+ * Apply an industry preset.
+ *
+ * Roles the preset names are seeded with their location and kind but NO cost, because
+ * there is no defensible industry figure for an underwriter's all-in cost and a plausible
+ * one here would be the most quietly damaging thing in the case. Roles a study already
+ * introduced keep everything they have.
+ */
+export const applyPreset = (c: Case, preset: CapacityPreset): Case => {
+  const previous = c.capacity;
+  const byRole = new Map((previous?.roles ?? []).map((r) => [normaliseRole(r.role), r]));
+
+  const roles: RoleCapacity[] = preset.roles.map((seed) => {
+    const kept = byRole.get(normaliseRole(seed.role));
+    if (kept) {
+      // A location the user has not set yet is filled from the preset; one they have set
+      // is left alone.
+      return kept.location === undefined || kept.location === ""
+        ? { ...kept, location: seed.location }
+        : kept;
+    }
+    const staffed = seed.kind === "staffed";
+    const params: RoleCapacity = {
+      role: seed.role,
+      workingHoursPerYear: staffed ? DEFAULT_GLOBALS.workingHoursPerYear : 0,
+      utilisationPct: staffed ? DEFAULT_GLOBALS.utilisationPct : 0,
+      location: seed.location,
+    };
+    if (seed.kind === "automated") params.automated = true;
+    if (seed.kind === "unassigned") params.unassigned = true;
+    return params;
+  });
+
+  // Roles a study introduced that the preset does not mention are kept — an import is
+  // evidence about this client and the preset is only a suggestion.
+  const extra = (previous?.roles ?? []).filter(
+    (r) => !roles.some((seeded) => normaliseRole(seeded.role) === normaliseRole(r.role)),
+  );
+
+  const statusShares: Record<string, Record<string, number>> = { ...(previous?.statusShares ?? {}) };
+  for (const transactionType of preset.transactionTypes) {
+    // Left EMPTY rather than split evenly. An even split across bound, lost and declined
+    // would be a fabricated hit rate, and required capacity scales directly with it.
+    statusShares[transactionType] ??= {};
+  }
+
+  const capacity: CapacityBlock = {
+    rows: previous?.rows ?? [],
+    demand: previous?.demand ?? [],
+    statusShares,
+    roles: [...roles, ...extra],
+    roleColumns: previous?.roleColumns ?? ["current", "target"],
+    baseColumn: previous?.baseColumn ?? "current",
+    targetColumn: previous?.targetColumn ?? "target",
+    excludedRowIds: previous?.excludedRowIds ?? [],
+    redeploymentRate: previous?.redeploymentRate ?? 0,
+    recruitmentCostPct: previous?.recruitmentCostPct ?? 0,
+    currency: previous?.currency ?? "USD",
+    ...(previous?.source ? { source: previous.source } : {}),
+  };
+
+  return {
+    ...c,
+    model: preset.model,
+    capacity,
+    roles: mergeRoles(
+      c.roles,
+      preset.roles.filter((r) => r.kind === "staffed").map((r) => r.role),
+    ),
+  };
 };
 
 /** Steps in the study that no demand cell reaches, so their minutes never count. */

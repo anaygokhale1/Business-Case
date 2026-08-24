@@ -206,6 +206,147 @@ describe("both files together", () => {
   });
 });
 
+describe("translating the capacity delta into money", () => {
+  const uploadBoth = async () => {
+    goToBatch(/process study & volumes/i);
+    await upload(/upload process time study/i, csvFile("study.csv", STUDY));
+    fireEvent.click(button(/import 4 steps/i));
+    await upload(/upload transaction volumes/i, csvFile("volumes.csv", VOLUMES));
+    fireEvent.click(button(/import 1 volume cell/i));
+    goToBatch(/role capacity/i);
+  };
+
+  /** Reviewer onshore at 120,000; Processor in a hub at 40,000. */
+  const enterCosts = () => {
+    const set = (name: RegExp, value: string) => {
+      const field = input(name);
+      fireEvent.change(field, { target: { value } });
+      fireEvent.blur(field);
+    };
+    set(/reviewer all-in annual cost/i, "120000");
+    set(/processor all-in annual cost/i, "40000");
+    fireEvent.change(input(/reviewer location/i), { target: { value: "Onshore" } });
+    fireEvent.change(input(/processor location/i), { target: { value: "Hub" } });
+  };
+
+  it("shows no money until a cost is entered, and says why", async () => {
+    mount();
+    await uploadBoth();
+    // FTE is known from the study; cost is in neither file. A saving of $0 would read as
+    // "no opportunity" rather than "no data", so the block is withheld entirely.
+    // Matched on the block's own heading, which carries the column arrow, so the
+    // explanatory note's use of the same words does not satisfy it.
+    expect(screen.queryByText(/annual saving ·/i)).toBeNull();
+    expect(screen.getByText(/no role has an all-in annual cost yet/i)).toBeTruthy();
+  });
+
+  it("values the current-to-target delta once costs are in", async () => {
+    mount();
+    await uploadBoth();
+    enterCosts();
+
+    // current : Reviewer 380,000 min / 84,600 = 4.4917 FTE | Processor 60,000 / 84,600 = 0.7092
+    // proposed: Reviewer 100,000 / 84,600 = 1.1820        | Processor 160,000 / 84,600 = 1.8913
+    // Saving   = (4.4917 - 1.1820) x 120,000 - (1.8913 - 0.7092) x 40,000
+    //          = 397,163 - 47,281 = 349,882
+    await waitFor(() => expect(screen.getByText(/annual saving/i)).toBeTruthy());
+    expect(screen.getByText("$349,882")).toBeTruthy();
+  });
+
+  it("attributes the saving to the location move rather than to grade", async () => {
+    mount();
+    await uploadBoth();
+    enterCosts();
+
+    // Reviewer @ Onshore -> Processor @ Hub is cheaper AND elsewhere, so the whole saving
+    // is a location shift. A client needs those separated: one is a job-design decision
+    // and the other is a footprint decision.
+    await waitFor(() => expect(screen.getByText(/from a cheaper location/i)).toBeTruthy());
+    expect(screen.getByText(/from a cheaper grade/i)).toBeTruthy();
+    expect(screen.getByText(/from automation/i)).toBeTruthy();
+  });
+
+  it("reports both the fractional and the whole-FTE saving", async () => {
+    mount();
+    await uploadBoth();
+    enterCosts();
+
+    // The delta of two rounded numbers is not the rounding of the delta, so both are
+    // shown and neither is presented as the other.
+    await waitFor(() => expect(screen.getByText(/on whole fte/i)).toBeTruthy());
+  });
+
+  it("charges severance on exits, and redeployment reduces them", async () => {
+    mount();
+    await uploadBoth();
+    enterCosts();
+
+    await waitFor(() => expect(screen.getByText(/one-time cost/i)).toBeTruthy());
+    const before = screen.getByText(/exiting,/i).textContent ?? "";
+
+    const rate = input(/redeployment rate/i);
+    fireEvent.change(rate, { target: { value: "100" } });
+    fireEvent.blur(rate);
+
+    // Capped at the growth available, so exits fall but do not reach zero.
+    await waitFor(() =>
+      expect(screen.getByText(/exiting,/i).textContent).not.toBe(before),
+    );
+  });
+
+  it("excludes a role with no cost and says how much FTE change that hides", async () => {
+    mount();
+    await uploadBoth();
+    const reviewerCost = input(/reviewer all-in annual cost/i);
+    fireEvent.change(reviewerCost, { target: { value: "120000" } });
+    fireEvent.blur(reviewerCost);
+
+    // Processor still has no cost. Its FTE change must not be valued at zero.
+    await waitFor(() =>
+      expect(screen.getByText(/have an fte change of .* but no cost/i)).toBeTruthy(),
+    );
+  });
+});
+
+describe("the insurance preset", () => {
+  it("is offered once Insurance is selected, and seeds the role grades", () => {
+    mount();
+    fireEvent.click(button(/^Insurance \/ Reinsurance$/));
+
+    expect(screen.getByText(/insurance right-shift template available/i)).toBeTruthy();
+    expect(screen.getByText(/UW, UA, SSC, COE, PAD, Collections, Engineering, System/)).toBeTruthy();
+    // Costs are deliberately not seeded.
+    expect(screen.getByText(/no costs are seeded/i)).toBeTruthy();
+
+    fireEvent.click(button(/use the insurance right-shift template/i));
+    expect(screen.getByText(/insurance right-shift template in use/i)).toBeTruthy();
+  });
+
+  it("seeds the roles with their location but no cost", () => {
+    mount();
+    fireEvent.click(button(/^Insurance \/ Reinsurance$/));
+    fireEvent.click(button(/use the insurance right-shift template/i));
+
+    goToBatch(/role capacity/i);
+    // SSC sits in a hub; UW onshore. That difference is where a right-shift saving comes
+    // from, so it is seeded rather than left for the user to remember.
+    expect(input(/ssc location/i).value).toBe("Hub");
+    expect(input(/uw location/i).value).toBe("Onshore");
+    expect(input(/uw all-in annual cost/i).value).toBe("");
+  });
+
+  it("is reversible back to the reduction model", () => {
+    mount();
+    fireEvent.click(button(/^Insurance \/ Reinsurance$/));
+    fireEvent.click(button(/use the insurance right-shift template/i));
+    fireEvent.click(button(/use the reduction model instead/i));
+
+    // Back to the offer, so the choice is never one-way.
+    expect(screen.getByText(/insurance right-shift template available/i)).toBeTruthy();
+    expect(screen.queryByText(/template in use/i)).toBeNull();
+  });
+});
+
 describe("a file that cannot be used", () => {
   it("says what is wrong rather than importing nothing quietly", async () => {
     mount();
