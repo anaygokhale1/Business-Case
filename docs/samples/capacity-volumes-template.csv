@@ -1,0 +1,7 @@
+LOB,Transaction Type,Period Start,Period End,Transactions Received,Bound,Lost,Declined,Notes
+Alpha,New,2025-01-01,2025-12-31,12400,7440,2976,1984,Full calendar year from the policy admin system
+Alpha,Renewal,2025-01-01,2025-12-31,9800,8330,980,490,
+Alpha,Endorsement,2025-01-01,2025-12-31,15600,15600,0,0,Endorsements are always applied
+Beta,New,2025-01-01,2025-12-31,4100,2050,1230,820,
+Beta,Renewal,2025-01-01,2025-12-31,3600,3060,360,180,
+Beta,Endorsement,2025-01-01,2025-12-31,5200,5200,0,0,

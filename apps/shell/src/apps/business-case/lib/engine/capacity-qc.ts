@@ -33,7 +33,23 @@ export const checkCapacityStudy = (
   /* G29 — status shares must sum to 100%                                   */
   /* ---------------------------------------------------------------------- */
 
-  for (const [transactionType, shares] of Object.entries(study.statusShares)) {
+  // Every split actually in force, whether it came from a demand cell or the defaults.
+  const splits: Array<{ label: string; path: string; shares: Record<string, number> }> = [
+    ...Object.entries(study.statusShares).map(([transactionType, shares]) => ({
+      label: transactionType,
+      path: `statusShares.${transactionType}`,
+      shares,
+    })),
+    ...study.demand
+      .filter((cell) => cell.outcomeShares !== undefined)
+      .map((cell) => ({
+        label: `${cell.lob} / ${cell.transactionType}`,
+        path: `demand.${cell.lob}.${cell.transactionType}.outcomeShares`,
+        shares: cell.outcomeShares!,
+      })),
+  ];
+
+  for (const { label: transactionType, path, shares } of splits) {
     const total = Object.values(shares).reduce((a, b) => a + b, 0);
     if (Object.keys(shares).length === 0) continue;
     if (Math.abs(total - 1) > 1e-9) {
@@ -44,7 +60,7 @@ export const checkCapacityStudy = (
         // means the number they challenge is not the number that was used.
         severity: "error",
         message: `${transactionType} outcome shares sum to ${(total * 100).toFixed(1)}%, not 100%. Required capacity scales directly with these, so every FTE figure is wrong until they add up.`,
-        path: `statusShares.${transactionType}`,
+        path,
         expected: 1,
         actual: total,
       });
@@ -55,7 +71,7 @@ export const checkCapacityStudy = (
           id: "G29",
           severity: "error",
           message: `${transactionType} / ${status} share is ${(share * 100).toFixed(1)}%, which is not a share.`,
-          path: `statusShares.${transactionType}.${status}`,
+          path: `${path}.${status}`,
           actual: share,
         });
       }

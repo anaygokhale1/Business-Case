@@ -27,6 +27,7 @@ import {
   distinctRoles,
   effectiveMinutes,
   roleFor,
+  sharesForCell,
   type CapacityStudy,
   type ProcessRow,
   type RoleCapacity,
@@ -147,7 +148,7 @@ export const computeCapacity = (
 
   for (const cell of study.demand) {
     const submissions = submissionsOf(cell);
-    const shares = study.statusShares[cell.transactionType] ?? {};
+    const shares = sharesForCell(cell, study.statusShares);
     const statuses = Object.keys(shares);
     const rows = byLob.get(cell.lob) ?? [];
 

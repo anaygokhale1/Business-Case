@@ -150,16 +150,31 @@ export interface DemandCell {
    * understates required capacity by nearly a factor of two.
    */
   submissions: Driver;
+  /**
+   * This cell's own outcome split, as shares summing to 1.
+   *
+   * Held per cell rather than only per transaction type because the mix genuinely
+   * differs by line of business — one book may bind 60% of what it quotes and another
+   * 50% — and a single split across both would move required capacity in the wrong
+   * direction for each. Falls back to `CapacityStudy.statusShares` when absent.
+   */
+  outcomeShares?: Record<string, number>;
 }
 
 /**
- * How transactions of a given type resolve across final statuses.
+ * Default outcome splits by transaction type, used for any demand cell that does not
+ * carry its own.
  *
- * Keyed by transaction type because the split genuinely differs: endorsements are
- * always bound, while new submissions are bound, lost or declined. G29 requires each
- * set to sum to 1 and does not silently normalise it.
+ * Endorsements are always bound; new submissions are bound, lost or declined. G29
+ * requires each set to sum to 1 and does not silently normalise it.
  */
 export type StatusShares = Record<string, Record<string, number>>;
+
+/** The outcome split in force for a demand cell: its own, else the type default. */
+export const sharesForCell = (
+  cell: DemandCell,
+  defaults: StatusShares,
+): Record<string, number> => cell.outcomeShares ?? defaults[cell.transactionType] ?? {};
 
 export interface CapacityStudy {
   rows: ProcessRow[];

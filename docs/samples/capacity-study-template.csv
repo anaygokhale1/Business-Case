@@ -1,0 +1,10 @@
+Step ID,Level 1,Level 2,Level 3,Level 4,Level 5 (Process),LOB,Region,Applies: New,Applies: Renewal,Applies: Endorsement,Applies: Bound,Applies: Lost,Applies: Declined,Current Role,Proposed Role,Target Role,AHT (minutes),AHT Min (minutes),AHT Max (minutes),Frequency (occurrences per transaction),Rework AHT (minutes),Rework Frequency (share of occurrences),Stated AHT (minutes),Notes
+ALP-0001,1 Intake,1.1 Receive,1.1.1 Receive submission,1.1.1.1 Log submission,Log submission in system,Alpha,Testland,Y,Y,N,Y,Y,Y,Reviewer,Processor,Processor,10,8,14,1,,,,
+ALP-0002,1 Intake,1.1 Receive,1.1.1 Receive submission,1.1.1.2 Check completeness,Determine if information is sufficient,Alpha,Testland,Y,Y,N,Y,Y,Y,Reviewer,Reviewer,Processor,20,15,30,0.5,,,,Occurs on roughly half of submissions
+ALP-0003,2 Assess,2.1 Evaluate,2.1.1 Price the risk,2.1.1.1 Run rating model,Produce indicative price,Alpha,Testland,Y,Y,N,Y,N,N,Reviewer,Automation,Automation,30,25,40,1,,,,Bound business only
+ALP-0004,3 Issue,3.1 Produce,3.1.1 Issue documents,3.1.1.1 Generate policy pack,Generate and send policy documents,Alpha,Testland,Y,Y,Y,Y,N,N,Processor,Processor,Processor,4,3,6,1,8,0.25,,25% need reissuing
+ALP-0005,4 Service,4.1 Amend,4.1.1 Process endorsement,4.1.1.1 Apply endorsement,Apply mid-term change,Alpha,Testland,N,N,Y,Y,N,N,Processor,Processor,Processor,12,9,18,1,,,,
+ALP-0006,4 Service,4.2 Collect,4.2.1 Chase payment,4.2.1.1 Issue reminder,Send payment reminder,Alpha,Testland,Y,Y,N,Y,N,N,,,Collections,6,4,9,0.3,,,,No current owner identified
+BET-0001,1 Intake,1.1 Receive,1.1.1 Receive submission,1.1.1.1 Log submission,Log submission in system,Beta,Testland,Y,Y,N,Y,Y,Y,Reviewer,Processor,Processor,20,16,28,1,,,,Beta submissions take longer to log
+BET-0002,2 Assess,2.1 Evaluate,2.1.1 Price the risk,2.1.1.1 Run rating model,Produce indicative price,Beta,Testland,Y,Y,N,Y,N,N,Reviewer,Reviewer,Automation,45,35,60,1,,,,
+BET-0003,5 Governance,5.1 Review,5.1.1 Placeholder,5.1.1.1 Placeholder,Placeholder - out of scope,Beta,Testland,Y,N,N,Y,N,N,Reviewer,Reviewer,Reviewer,16.38,,,1,,,0,Deliberately excluded; stated AHT overrides the components
