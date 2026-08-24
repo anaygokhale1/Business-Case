@@ -71,6 +71,7 @@ export type CaseAction =
   | { type: "unit/setHeadcount"; unitId: string; roleId: string; value: Driver }
   | { type: "unit/setCost"; unitId: string; roleId: string; value: Driver }
   | { type: "unit/remove"; unitId: string }
+  | { type: "volumes/apply"; entries: VolumeApplyEntry[]; applyHandleTime: boolean }
   | { type: "timeStudy/add"; region?: string }
   | { type: "timeStudy/set"; index: number; patch: Partial<TimeStudyRow> }
   | { type: "timeStudy/setRegion"; index: number; region: string | null }
@@ -97,6 +98,26 @@ export type CaseAction =
 
 /** Capacity fields the form edits as free numbers. */
 export type CapacityNumber = "redeploymentRate" | "recruitmentCostPct";
+
+/**
+ * One row of a regional volume import, already matched against the register.
+ *
+ * The matching lives in `lib/import/region-volumes.ts` so it can be shown to the user
+ * before anything is written; by the time an entry reaches the reducer the decision has
+ * been made. `unitId: null` means create the row — the import knows the region is new, or
+ * the team inside it is.
+ */
+export interface VolumeApplyEntry {
+  unitId: string | null;
+  region: string;
+  /** Blank when the file names no team inside the region. */
+  unitName: string;
+  /** Set when the row being updated is a region placeholder the file has named. */
+  renameTo?: string;
+  annualVolume: number;
+  /** Volume-weighted from the file. Absent when the file carried no handle times. */
+  handleTimeMinutes?: number;
+}
 
 /** Globals the form edits as free numbers. Enums go through `globals/setChoice`. */
 export type NumericGlobal =
@@ -365,6 +386,56 @@ export function caseReducer(state: Case, action: CaseAction): Case {
 
     case "unit/remove":
       return { ...state, units: state.units.filter((u) => u.id !== action.unitId) };
+
+    case "volumes/apply": {
+      if (action.entries.length === 0) return state;
+
+      const updates = new Map<string, VolumeApplyEntry>();
+      for (const entry of action.entries) {
+        if (entry.unitId !== null) updates.set(entry.unitId, entry);
+      }
+
+      // One pass, and a row the import did not mention is returned by reference. Not a
+      // micro-optimisation: the engine memoises per-unit results in a WeakMap keyed on
+      // the object, so rebuilding every row here would recompute the whole register on
+      // an import that touched one region.
+      let touched = updates.size > 0;
+      const units = state.units.map((u) => {
+        const entry = updates.get(u.id);
+        if (!entry) return u;
+        let next: Unit = { ...u, volume: entry.annualVolume };
+        // Only ever a placeholder still carrying the region's name — see the planner.
+        // A row the user named keeps its name.
+        if (entry.renameTo !== undefined && entry.renameTo !== "") next.name = entry.renameTo;
+        // A file with no handle-time column leaves the driver exactly as it was —
+        // inheriting stays inheriting, an own value stays owned. Clearing it here would
+        // discard a measured figure in exchange for nothing.
+        if (action.applyHandleTime && entry.handleTimeMinutes !== undefined) {
+          next = applyDriver(next, "handleTimeMinutes", entry.handleTimeMinutes);
+        }
+        return next;
+      });
+
+      const created: Unit[] = [];
+      const takenIds = state.units.map((u) => u.id);
+      for (const entry of action.entries) {
+        if (entry.unitId !== null) continue;
+        // Named after the team when the file names one, otherwise after the region —
+        // matching `region/add`, where a region arrives as a single row carrying its name.
+        const named = entry.unitName !== "";
+        const name = named ? entry.unitName : entry.region;
+        const id = uniqueId(slugify(named ? `${entry.region}-${name}` : entry.region), takenIds);
+        takenIds.push(id);
+        let unit: Unit = { ...blankUnit(id, name, entry.region), volume: entry.annualVolume };
+        if (action.applyHandleTime && entry.handleTimeMinutes !== undefined) {
+          unit = applyDriver(unit, "handleTimeMinutes", entry.handleTimeMinutes);
+        }
+        created.push(unit);
+        touched = true;
+      }
+
+      return touched ? { ...state, units: [...units, ...created] } : state;
+    }
 
     /* -------------------------- time study -------------------------------- */
 

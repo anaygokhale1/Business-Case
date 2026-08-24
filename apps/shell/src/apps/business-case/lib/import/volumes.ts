@@ -18,6 +18,7 @@
  */
 
 import type { DemandCell } from "../engine/process-study";
+import { normaliseHeader, scoreAgainstAliases } from "./headers";
 import { parseCellNumber } from "./numbers";
 import type { Sheet } from "./tabular";
 
@@ -83,28 +84,10 @@ const OUTCOME_HINTS = [
   "rejected",
 ];
 
-const normalise = (header: string): string =>
-  header
-    .toLowerCase()
-    .replace(/\(.*?\)/g, "")
-    .replace(/[^a-z0-9]/g, "");
+const normalise = normaliseHeader;
 
-const scoreHeader = (header: string, field: VolumeField): number => {
-  const norm = normalise(header);
-  if (norm === "") return 0;
-  let best = 0;
-  for (const alias of ALIASES[field]) {
-    const target = normalise(alias);
-    if (norm === target) {
-      best = Math.max(best, 100);
-      continue;
-    }
-    if (Math.min(norm.length, target.length) < 3) continue;
-    if (norm.startsWith(target) || target.startsWith(norm)) best = Math.max(best, 70);
-    else if (norm.includes(target)) best = Math.max(best, 50);
-  }
-  return best;
-};
+const scoreHeader = (header: string, field: VolumeField): number =>
+  scoreAgainstAliases(header, ALIASES[field]);
 
 /**
  * Find the header row using the VOLUME vocabulary.

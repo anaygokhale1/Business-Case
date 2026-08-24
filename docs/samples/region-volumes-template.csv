@@ -1,0 +1,7 @@
+Region,Team,Process,Volume,Average Handling Time (minutes)
+North America,Claims Intake,First notification of loss,48000,12.5
+North America,Claims Intake,Reassessment,12000,26.0
+North America,Adjusting,Desk adjustment,16800,48.0
+Europe,Claims Intake,First notification of loss,31000,14.0
+Europe,Adjusting,Desk adjustment,10400,52.0
+Asia Pacific,,First notification of loss,9600,11.0

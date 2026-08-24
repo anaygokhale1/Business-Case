@@ -317,3 +317,134 @@ describe("blank case", () => {
     expect(b.globals.phaseWeights["Even"]![0]).toBe(0.25);
   });
 });
+
+describe("applying a regional volume import", () => {
+  const seeded = () =>
+    run(
+      blank(),
+      { type: "region/add", name: "Europe" },
+      { type: "region/add", name: "North America" },
+    );
+
+  it("writes the annual volume onto the matched row", () => {
+    const c = run(seeded(), {
+      type: "volumes/apply",
+      entries: [{ unitId: "europe", region: "Europe", unitName: "", annualVolume: 124_000 }],
+      applyHandleTime: false,
+    });
+    expect(c.units.find((u) => u.id === "europe")!.volume).toBe(124_000);
+  });
+
+  it("leaves rows the file did not mention by reference, not merely equal", () => {
+    const before = seeded();
+    const after = run(before, {
+      type: "volumes/apply",
+      entries: [{ unitId: "europe", region: "Europe", unitName: "", annualVolume: 124_000 }],
+      applyHandleTime: false,
+    });
+
+    const na = (c: Case) => c.units.find((u) => u.id === "north-america")!;
+    // Identity, not equality. The engine memoises per-unit results in a WeakMap keyed on
+    // the object, so a rebuilt row is a silently recomputed row.
+    expect(na(after)).toBe(na(before));
+    expect(na(after).volume).toBe(SENTINEL);
+  });
+
+  it("creates a row for a region the case did not have", () => {
+    const c = run(seeded(), {
+      type: "volumes/apply",
+      entries: [{ unitId: null, region: "Asia Pacific", unitName: "", annualVolume: 9_600 }],
+      applyHandleTime: false,
+    });
+    expect(regionsOf(c)).toEqual(["Europe", "North America", "Asia Pacific"]);
+    const created = c.units.find((u) => u.region === "Asia Pacific")!;
+    expect(created.id).toBe("asia-pacific");
+    // Named after the region, as `region/add` does, so the two paths produce the same shape.
+    expect(created.name).toBe("Asia Pacific");
+    expect(created.volume).toBe(9_600);
+  });
+
+  it("creates a named row inside an existing region", () => {
+    const c = run(seeded(), {
+      type: "volumes/apply",
+      entries: [
+        { unitId: null, region: "Europe", unitName: "Recoveries", annualVolume: 3_000 },
+      ],
+      applyHandleTime: false,
+    });
+    const created = c.units.find((u) => u.name === "Recoveries")!;
+    expect(created.id).toBe("europe-recoveries");
+    expect(created.region).toBe("Europe");
+    expect(c.units.filter((u) => u.region === "Europe")).toHaveLength(2);
+  });
+
+  it("gives two new rows distinct ids without consulting a clock", () => {
+    const entries = [
+      { unitId: null, region: "Europe", unitName: "Intake", annualVolume: 1_000 },
+      { unitId: null, region: "Europe", unitName: "Intake", annualVolume: 2_000 },
+    ];
+    const first = run(seeded(), { type: "volumes/apply", entries, applyHandleTime: false });
+    const second = run(seeded(), { type: "volumes/apply", entries, applyHandleTime: false });
+    expect(first.units.map((u) => u.id)).toEqual([
+      "europe",
+      "north-america",
+      "europe-intake",
+      "europe-intake-2",
+    ]);
+    // Deterministic, so a saved case diffs cleanly and a test replays identically.
+    expect(second.units.map((u) => u.id)).toEqual(first.units.map((u) => u.id));
+  });
+
+  it("writes handle time only when asked to", () => {
+    const entries = [
+      {
+        unitId: "europe",
+        region: "Europe",
+        unitName: "",
+        annualVolume: 124_000,
+        handleTimeMinutes: 14.5,
+      },
+    ];
+
+    const without = run(seeded(), { type: "volumes/apply", entries, applyHandleTime: false });
+    // Still inheriting: the key is absent rather than undefined, or a JSON round-trip
+    // would turn "inherits the global" into "has no value".
+    expect("handleTimeMinutes" in without.units[0]!).toBe(false);
+
+    const with_ = run(seeded(), { type: "volumes/apply", entries, applyHandleTime: true });
+    expect(with_.units[0]!.handleTimeMinutes).toBe(14.5);
+  });
+
+  it("leaves an existing handle time alone when the file carried none", () => {
+    const c = run(
+      seeded(),
+      { type: "unit/setDriver", unitId: "europe", driver: "handleTimeMinutes", value: 22 },
+      {
+        type: "volumes/apply",
+        entries: [{ unitId: "europe", region: "Europe", unitName: "", annualVolume: 124_000 }],
+        applyHandleTime: true,
+      },
+    );
+    // A volumes file with no time column must not overwrite a measured figure, and must
+    // not clear it either — it simply has nothing to say about handle time.
+    expect(c.units[0]!.handleTimeMinutes).toBe(22);
+  });
+
+  it("is idempotent, so re-importing a corrected file does not double the volume", () => {
+    const action: CaseAction = {
+      type: "volumes/apply",
+      entries: [{ unitId: "europe", region: "Europe", unitName: "", annualVolume: 124_000 }],
+      applyHandleTime: false,
+    };
+    const once = run(seeded(), action);
+    const twice = run(once, action);
+    expect(twice.units.find((u) => u.id === "europe")!.volume).toBe(124_000);
+  });
+
+  it("returns the same case when there is nothing to apply", () => {
+    const before = seeded();
+    expect(caseReducer(before, { type: "volumes/apply", entries: [], applyHandleTime: true })).toBe(
+      before,
+    );
+  });
+});

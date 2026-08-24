@@ -1,16 +1,49 @@
 # Upload templates
 
-Two files, one workbook. Both are synthetic — invented lines of business, invented
-processes, invented figures.
+All synthetic — invented lines of business, invented processes, invented figures.
 
-| Template | Grain | What it answers |
-|---|---|---|
-| `capacity-study-template.csv` | one row per process step | how long the work takes, and who does it |
-| `capacity-volumes-template.csv` | one row per line of business × transaction type | how much work there is |
-| `time-study-sample.csv` | one row per task | the simpler flat study, for a case with no role dimension |
+| Template | Grain | Where it imports | What it answers |
+|---|---|---|---|
+| `capacity-study-template.csv` | one row per process step | Process study & volumes | how long the work takes, and who does it |
+| `capacity-volumes-template.csv` | one row per line of business × transaction type | Process study & volumes | how much work there is |
+| `region-volumes-template.csv` | one row per region, or region × process | Workload & demand | how much work there is, by where it happens |
+| `time-study-sample.csv` | one row per task | Time study | the simpler flat study, for a case with no role dimension |
 
-Ask for both as **two sheets in one workbook**. The client maintains one artefact, it
-travels as one attachment, and the importer reads both.
+The capacity pair belongs together — ask for them as **two sheets in one workbook**. The
+client maintains one artefact, it travels as one attachment, and the importer reads both.
+
+## Two volume templates, because there are two models
+
+`capacity-volumes-template.csv` is keyed on line of business and transaction type and
+carries an outcome mix. It feeds the capacity model, where required FTE per role comes from
+minutes per transaction. `region-volumes-template.csv` is keyed on where the work happens
+and feeds the register, where each row is sized against its own productive hours. Same word,
+different question — and a file shaped for one imports badly into the other, so the two
+have separate importers and separate header vocabularies.
+
+## Regional volumes: what each column is for
+
+- **`Region`** — matched against the register by name, ignoring case and spacing. A region
+  the case has not heard of is offered as a new row rather than dropped.
+- **`Team`** — optional, and only needed when a region is split into several rows. Without
+  it, a region the case splits in two cannot be resolved: the importer says so and writes
+  nothing, because dividing the volume evenly would produce a register that adds up and
+  describes an organisation that does not exist.
+- **`Process / product`** — optional and informational. Its only job is to keep the roll-up
+  inspectable, and to let identical repeated rows be spotted.
+- **`Volume`** — as counted, over whatever period the file covers. **The period is chosen at
+  import**, not read from the file, because nothing in a volume extract distinguishes 60,000
+  a quarter from 60,000 a year and reading the first as the second understates the case
+  fourfold with every number still looking ordinary.
+- **`Average Handling Time`** — optional. Where present it becomes each region's own handle
+  time, **volume-weighted** across that region's rows rather than averaged. Averaging
+  understates capacity whenever the slower work is also the more common work, which is the
+  usual shape. Rows that state no time stay out of the weighting instead of entering it as
+  a zero.
+
+Multiple rows per region are summed, because volume is additive. Identical rows — same
+process, same figure — are still summed but flagged, since a double-counted extract is the
+other explanation and it inflates a case by an amount nobody would think to question.
 
 ## Why volumes are a separate, differently shaped file
 

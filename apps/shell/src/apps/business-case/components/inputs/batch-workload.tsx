@@ -1,5 +1,7 @@
 "use client";
 
+import { useState } from "react";
+
 import { useCaseStore } from "../../hooks/use-case-store";
 import { HANDLE_TIME_SOURCES } from "../../lib/case-defaults";
 import type { AnswerStatus } from "../../lib/case-questions";
@@ -8,6 +10,7 @@ import { SENTINEL } from "../../lib/engine/types";
 import {
   ChoiceField,
   FieldGrid,
+  ghostButtonClass,
   Note,
   NumberField,
   NumberInput,
@@ -16,6 +19,7 @@ import {
   TextField,
 } from "./fields";
 import { UnitGrid, type UnitColumn } from "./unit-grid";
+import { VolumeImport } from "./volume-import";
 
 /** Batch 6 — Q17, Q18, Q19, Q20, Q22. The demand side of the identity. */
 export function BatchWorkload({
@@ -29,6 +33,15 @@ export function BatchWorkload({
   const { globals, meta } = workingCase;
   const resolved = resolveGlobals(workingCase);
   const workload = meta.workloadUnitName.trim();
+  const [importing, setImporting] = useState(false);
+
+  // Reported together on purpose: a total that silently excluded the blank rows would
+  // read as the portfolio's demand while describing only part of it.
+  const totalVolume = workingCase.units.reduce(
+    (total, u) => total + (typeof u.volume === "number" ? u.volume : 0),
+    0,
+  );
+  const uncovered = workingCase.units.filter((u) => typeof u.volume !== "number").length;
 
   const columns: UnitColumn[] = [
     {
@@ -152,22 +165,56 @@ export function BatchWorkload({
           </div>
         </FieldGrid>
 
-        <div>
-          <p className="mb-3 text-[11px] font-extrabold uppercase tracking-[0.14em] text-outline">
-            Volume per row <span className="text-slate-300">Q17 · Q18</span>
-          </p>
+        <div className="space-y-3">
+          <div className="flex flex-wrap items-baseline justify-between gap-3">
+            <p className="text-[11px] font-extrabold uppercase tracking-[0.14em] text-outline">
+              Volume per row <span className="text-slate-300">Q17 · Q18</span>
+            </p>
+            {importing ? null : (
+              <button
+                type="button"
+                className={ghostButtonClass}
+                onClick={() => setImporting(true)}
+              >
+                Upload a volumes study
+              </button>
+            )}
+          </div>
+
+          {importing ? <VolumeImport onDone={() => setImporting(false)} /> : null}
+
           <UnitGrid
             columns={columns}
-            emptyMessage="Add a region in the Scope step first — volume is captured per row."
+            emptyMessage="No rows yet — add a region in the Scope step, or upload a volumes study and let it create them."
           />
+
+          {totalVolume > 0 ? (
+            <p className="text-xs text-muted">
+              <span className="font-semibold text-ink">
+                {totalVolume.toLocaleString("en-US")} {workload || "units"}
+              </span>{" "}
+              across {workingCase.units.length} row{workingCase.units.length === 1 ? "" : "s"}
+              {uncovered > 0 ? (
+                <>
+                  , with{" "}
+                  <span className="font-semibold text-red-600">
+                    {uncovered} row{uncovered === 1 ? "" : "s"} carrying no volume
+                  </span>{" "}
+                  and contributing no required capacity
+                </>
+              ) : null}
+              .
+            </p>
+          ) : null}
         </div>
 
         <Note>
-          <strong>Handle time can come from two places.</strong> Either you assert one average here,
-          or the Time Study step derives it from task-level times and volumes — one figure you
-          assert, or a volume-weighted average of the tasks. The study adds no demand of its own;
-          annual volume above is still what the case is sized against. If you already have a
-          measured average, the Time Study step can be marked not applicable.
+          <strong>Handle time can come from three places.</strong> You assert one average here; the
+          Time Study step derives it from task-level times and volumes; or the volumes study above
+          carries a handle time per row and each region takes its own, volume-weighted. A row&rsquo;s
+          own figure always wins over the global. The Time Study adds no demand of its own — annual
+          volume is still what the case is sized against — so if you already have a measured
+          average, that step can be marked not applicable.
         </Note>
 
         <Note>
