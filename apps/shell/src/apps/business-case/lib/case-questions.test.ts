@@ -14,17 +14,26 @@ const run = (start: Case, ...actions: CaseAction[]): Case =>
 const statusOf = (c: Case, id: string) => QUESTIONS.find((q) => q.id === id)!.status(c);
 
 describe("question coverage", () => {
+  /** The skill's own 35 keep the Q prefix; capacity additions use C. */
+  const skillQuestions = QUESTIONS.filter((q) => q.id.startsWith("Q"));
+
   it("carries the skill's 35 questions, each exactly once", () => {
     // The whole point of holding these as data: a question cannot quietly go missing
     // in a refactor and be noticed by a client instead.
-    expect(QUESTIONS).toHaveLength(35);
-    const ids = QUESTIONS.map((q) => q.id);
-    expect(new Set(ids).size).toBe(35);
+    expect(skillQuestions).toHaveLength(35);
+    expect(new Set(skillQuestions.map((q) => q.id)).size).toBe(35);
   });
 
   it("numbers them Q1..Q35 with no gaps", () => {
-    const numbers = QUESTIONS.map((q) => Number(q.id.slice(1))).sort((a, b) => a - b);
+    const numbers = skillQuestions.map((q) => Number(q.id.slice(1))).sort((a, b) => a - b);
     expect(numbers).toEqual(Array.from({ length: 35 }, (_, i) => i + 1));
+  });
+
+  it("keeps capacity additions on their own prefix, so the skill count stays checkable", () => {
+    // Additions beyond the interview are legitimate but must not dilute the guarantee
+    // that all 35 of the skill's questions are present.
+    const additions = QUESTIONS.filter((q) => !q.id.startsWith("Q"));
+    expect(additions.map((q) => q.id)).toEqual(["C1", "C2", "C3", "C4"]);
   });
 
   it("assigns every question to a declared batch, and leaves no batch empty", () => {

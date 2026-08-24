@@ -14,9 +14,11 @@ import { useState } from "react";
 import { useCaseStore } from "../../hooks/use-case-store";
 import { statusMapOf, type BatchId, type BatchProgress } from "../../lib/case-questions";
 import { ghostButtonClass, primaryButtonClass } from "./fields";
+import { BatchCapacityUpload } from "./batch-capacity-upload";
 import { BatchCompany } from "./batch-company";
 import { BatchCompensation } from "./batch-compensation";
 import { BatchPhasing } from "./batch-phasing";
+import { BatchRoleCapacity } from "./batch-role-capacity";
 import { BatchRoles } from "./batch-roles";
 import { BatchScenarios } from "./batch-scenarios";
 import { BatchScope } from "./batch-scope";
@@ -75,6 +77,8 @@ export function InputsWorkspace({ onGenerated }: { onGenerated: () => void }) {
             {current.batch.id === "workload" ? <BatchWorkload {...props} /> : null}
             {current.batch.id === "timeStudy" ? <BatchTimeStudy {...props} /> : null}
             {current.batch.id === "scenarios" ? <BatchScenarios {...props} /> : null}
+            {current.batch.id === "capacityUpload" ? <BatchCapacityUpload blurb={props.blurb} /> : null}
+            {current.batch.id === "roleCapacity" ? <BatchRoleCapacity {...props} /> : null}
             {current.batch.id === "phasing" ? <BatchPhasing {...props} /> : null}
           </div>
 

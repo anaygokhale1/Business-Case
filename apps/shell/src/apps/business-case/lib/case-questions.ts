@@ -25,7 +25,9 @@ export type BatchId =
   | "workload"
   | "timeStudy"
   | "scenarios"
-  | "phasing";
+  | "phasing"
+  | "capacityUpload"
+  | "roleCapacity";
 
 export type AnswerStatus =
   /** The user supplied it. */
@@ -112,6 +114,18 @@ export const BATCHES: readonly Batch[] = [
     label: "Scenarios & severance",
     blurb:
       "The Low / Base / High reduction spread, the severance basis, and the horizon every multi-year figure is computed over.",
+  },
+  {
+    id: "capacityUpload",
+    label: "Process study & volumes",
+    blurb:
+      "Upload a process time study and a volume sheet. The study says how long each step takes and who does it; the volumes say how much work there is. Between them they fill in most of what follows.",
+  },
+  {
+    id: "roleCapacity",
+    label: "Role capacity",
+    blurb:
+      "Working hours and utilisation for each role the study names, and which assignment is the to-be state. Neither figure is in the files, so both start at the documented default.",
   },
   {
     id: "phasing",
@@ -361,6 +375,50 @@ export const QUESTIONS: readonly Question[] = [
     status: (c) => {
       const weights = c.globals.phaseWeights[c.globals.exitProfile] ?? [];
       return Math.abs(weights.reduce((a, b) => a + b, 0) - 1) < 1e-9 ? "default" : "answered";
+    },
+  },
+  /* ---- Capacity model: additions beyond the skill's 35 ---- */
+  {
+    id: "C1",
+    batch: "capacityUpload",
+    label: "Process time study",
+    required: false,
+    status: (c) => ((c.capacity?.rows.length ?? 0) > 0 ? "answered" : "empty"),
+  },
+  {
+    id: "C2",
+    batch: "capacityUpload",
+    label: "Transaction volumes",
+    required: false,
+    status: (c) => ((c.capacity?.demand.length ?? 0) > 0 ? "answered" : "empty"),
+  },
+  {
+    id: "C3",
+    batch: "roleCapacity",
+    label: "Working hours and utilisation per role",
+    required: false,
+    status: (c) => {
+      const staffed = (c.capacity?.roles ?? []).filter((r) => !r.automated && !r.unassigned);
+      if (staffed.length === 0) return "n/a";
+      if (staffed.some((r) => !(r.workingHoursPerYear > 0) || !(r.utilisationPct > 0))) return "empty";
+      // Every staffed role still sitting on both documented defaults means nobody has
+      // confirmed them, which is a different statement from having entered them.
+      const untouched = staffed.every(
+        (r) => r.workingHoursPerYear === 1880 && r.utilisationPct === 0.75,
+      );
+      return untouched ? "default" : "answered";
+    },
+  },
+  {
+    id: "C4",
+    batch: "roleCapacity",
+    label: "To-be role assignment",
+    required: false,
+    status: (c) => {
+      const capacity = c.capacity;
+      if (!capacity || capacity.roleColumns.length === 0) return "n/a";
+      // Same column for both means no reallocation is being modelled yet.
+      return capacity.targetColumn === capacity.baseColumn ? "empty" : "answered";
     },
   },
 ] as const;

@@ -15,19 +15,26 @@
  *     round-trip, which is why `exactOptionalPropertyTypes` stays on.
  */
 
+import { applyStudy, applyVolumes } from "./capacity-populate";
 import { benchmarkFor, STANDARD_PHASE_WEIGHTS, SUGGESTED_SCENARIOS } from "./case-defaults";
 import type { InheritableDriver } from "./engine/drivers";
+import { normaliseRole } from "./engine/process-study";
 import type {
+  CapacityBlock,
   Case,
+  CaseModel,
+  DemandCell,
   Driver,
   ExitProfile,
   Globals,
   Role,
+  RoleCapacity,
   RoleTier,
   ScenarioKey,
   TimeStudyRow,
   Unit,
 } from "./engine/types";
+import type { StudyImportResult } from "./import/process-study-map";
 import { SENTINEL } from "./engine/types";
 
 /* -------------------------------------------------------------------------- */
@@ -74,7 +81,15 @@ export type CaseAction =
   | { type: "phaseWeights/set"; profile: ExitProfile; index: number; value: number }
   | { type: "phaseWeights/resize"; phaseCount: number }
   | { type: "benchmark/applyCompensation" }
-  | { type: "scenario/applySuggestedSpread" };
+  | { type: "scenario/applySuggestedSpread" }
+  /* ---- capacity model ---- */
+  | { type: "capacity/applyStudy"; study: StudyImportResult; fileName?: string; at?: string }
+  | { type: "capacity/applyVolumes"; demand: DemandCell[]; fileName?: string; at?: string }
+  | { type: "capacity/setColumn"; which: "base" | "target"; column: string }
+  | { type: "capacity/setRoleParam"; role: string; patch: Partial<RoleCapacity> }
+  | { type: "capacity/setExcludedRowIds"; rowIds: string[] }
+  | { type: "capacity/clear" }
+  | { type: "model/set"; model: CaseModel };
 
 /** Globals the form edits as free numbers. Enums go through `globals/setChoice`. */
 export type NumericGlobal =
@@ -465,6 +480,54 @@ export function caseReducer(state: Case, action: CaseAction): Case {
         }),
       };
     }
+
+    /* --------------------------- capacity -------------------------------- */
+
+    case "capacity/applyStudy":
+      // The summary is for the UI to report; the reducer keeps only the case.
+      return applyStudy(state, action.study, action.fileName, action.at).next;
+
+    case "capacity/applyVolumes":
+      return applyVolumes(state, action.demand, action.fileName, action.at);
+
+    case "capacity/setColumn": {
+      if (!state.capacity) return state;
+      const capacity: CapacityBlock = {
+        ...state.capacity,
+        ...(action.which === "base"
+          ? { baseColumn: action.column }
+          : { targetColumn: action.column }),
+      };
+      return { ...state, capacity };
+    }
+
+    case "capacity/setRoleParam": {
+      if (!state.capacity) return state;
+      const target = normaliseRole(action.role);
+      let hit = false;
+      const roles = state.capacity.roles.map((r) => {
+        if (normaliseRole(r.role) !== target) return r;
+        hit = true;
+        return { ...r, ...action.patch };
+      });
+      if (!hit) return state;
+      return { ...state, capacity: { ...state.capacity, roles } };
+    }
+
+    case "capacity/setExcludedRowIds": {
+      if (!state.capacity) return state;
+      return { ...state, capacity: { ...state.capacity, excludedRowIds: action.rowIds } };
+    }
+
+    case "capacity/clear": {
+      if (!state.capacity) return state;
+      const next = { ...state, model: "reduction" as CaseModel };
+      delete next.capacity;
+      return next;
+    }
+
+    case "model/set":
+      return { ...state, model: action.model };
 
     default: {
       // Exhaustiveness: a new action with no case fails to compile here.

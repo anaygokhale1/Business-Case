@@ -174,8 +174,171 @@ export interface Override {
   at: string;
 }
 
+/* -------------------------------------------------------------------------- */
+/* The capacity model — process study, demand and role parameters              */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * One leaf of the process taxonomy.
+ *
+ * `applicability` is what makes a single register serve several transaction shapes: a
+ * step may happen on a new submission but not a renewal, and on a bound policy but not
+ * a declined one. An EMPTY list means "applies to all", because a study that leaves the
+ * flags blank means the step is universal, not that it never happens.
+ */
+export interface ProcessRow {
+  id: string;
+  /** Coarse to fine, e.g. ["5 Client Servicing", "5.2 Process Request", ...]. */
+  path: string[];
+  /** Top-level split, e.g. line of business. */
+  lob: string;
+  region: string;
+  /** Transaction types this step applies to. Empty = all. */
+  transactionTypes: string[];
+  /** Final statuses this step applies to. Empty = all. */
+  statuses: string[];
+  /**
+   * Role assignment per column, e.g. { current: "UW", target: "UA" }. A column absent
+   * from this map, or holding "", is unassigned for that scenario — see G30.
+   */
+  roles: Record<string, string>;
+  /** Minutes for ONE occurrence of the step. */
+  ahtMinutes: Driver;
+  /**
+   * Occurrences per transaction. At or below 1 this reads as the share of transactions
+   * where the step happens; above 1 the step happens more than once. Both are legal.
+   */
+  frequency: Driver;
+  /** Minutes to redo the step. Absent means no rework is modelled for this step. */
+  reworkMinutes?: Driver;
+  /** Share of occurrences that need redoing. */
+  reworkFrequency?: Driver;
+  /**
+   * The study's own stated expected-minutes figure, where it carries one.
+   *
+   * A real study computes this from the components — but not always. In the study this
+   * was modelled on, 170 of 2,229 cells were typed in rather than calculated, and six of
+   * those disagreed with their own inputs: hardcoded to 0 while the components said
+   * otherwise, evidently to take a step out of scope without deleting its measurements.
+   *
+   * So the stated figure WINS when present, because it is what the client's own totals
+   * use and reproducing those is what makes the model trustworthy to them. G32 reports
+   * every divergence, so a deliberate override stays visible and an accidental one gets
+   * found.
+   */
+  statedMinutes?: Driver;
+}
+
+/** Capacity parameters for one role. No cost — that is a separate layer. */
+export interface RoleCapacity {
+  role: string;
+  workingHoursPerYear: number;
+  utilisationPct: number;
+  /**
+   * Work assigned here leaves human capacity entirely — an automation target. It still
+   * appears in the results with its minutes, so the automation is visible rather than
+   * simply missing, but it consumes no FTE.
+   */
+  automated?: boolean;
+  /**
+   * A placeholder owner rather than a real team, e.g. "NA" for a step nobody has been
+   * assigned yet. Its minutes are reported as undecided scope and never costed or
+   * staffed, because pretending someone does the work is the more dangerous error.
+   */
+  unassigned?: boolean;
+}
+
+/** Transactions received for one (lob, transactionType). */
+export interface DemandCell {
+  lob: string;
+  transactionType: string;
+  /**
+   * Transactions RECEIVED, not transactions completed.
+   *
+   * This is the definition that matters most in the whole module. A submission that is
+   * lost or declined still consumes most of the work a bound one does — in the study
+   * this was modelled on, 826 minutes against 957 — so counting only bound policies
+   * understates required capacity by nearly a factor of two.
+   */
+  submissions: Driver;
+  /**
+   * This cell's own outcome split, as shares summing to 1.
+   *
+   * Held per cell rather than only per transaction type because the mix genuinely
+   * differs by line of business — one book may bind 60% of what it quotes and another
+   * 50% — and a single split across both would move required capacity in the wrong
+   * direction for each. Falls back to `CapacityStudy.statusShares` when absent.
+   */
+  outcomeShares?: Record<string, number>;
+}
+
+/**
+ * Default outcome splits by transaction type, used for any demand cell that does not
+ * carry its own.
+ *
+ * Endorsements are always bound; new submissions are bound, lost or declined. G29
+ * requires each set to sum to 1 and does not silently normalise it.
+ */
+export type StatusShares = Record<string, Record<string, number>>;
+
+export interface CapacityStudy {
+  rows: ProcessRow[];
+  demand: DemandCell[];
+  statusShares: StatusShares;
+  roles: RoleCapacity[];
+  /** Which role columns the study carries, e.g. ["current", "proposed", "target"]. */
+  roleColumns: string[];
+}
+
+/**
+ * Everything the capacity model needs, as it sits on the case document.
+ *
+ * `targetColumn` is which role assignment the to-be state reads. A study commonly carries
+ * several that disagree with each other, and which one is the target is a decision the
+ * case records rather than a property of the file.
+ */
+export interface CapacityBlock extends CapacityStudy {
+  /** The as-is assignment. Almost always "current". */
+  baseColumn: string;
+  /** The to-be assignment, chosen from `roleColumns`. */
+  targetColumn: string;
+  /**
+   * Surplus copies of duplicate row groups the user has chosen to exclude. Empty by
+   * default — G28 never removes a row on its own.
+   */
+  excludedRowIds: string[];
+  /** Where the numbers came from, for the audit trail. */
+  source?: {
+    studyFile?: string;
+    volumesFile?: string;
+    importedAt?: string;
+  };
+}
+
+/**
+ * Which model the case is built on.
+ *
+ * `reduction` is the original shape: a unit register, and a headcount reduction
+ * percentage applied to it. `capacity` is the process-study shape: required FTE per role
+ * derived from volumes, handle times and rework, with the opportunity expressed as work
+ * moving between roles rather than as a percentage cut.
+ *
+ * Held as an explicit discriminator rather than inferred from whether a study is present,
+ * because a case can carry a study for reference while still being modelled as a
+ * reduction, and the reader is entitled to know which one produced the numbers.
+ */
+export type CaseModel = "reduction" | "capacity";
+
 export interface Case {
   schema: "case.workforce.v2";
+  /** Defaults to "reduction" when absent, so existing saved cases keep working. */
+  model?: CaseModel;
+  /**
+   * The process time study and its capacity parameters, when one has been uploaded.
+   * Typed as `unknown` here and narrowed by the capacity modules to keep this file free
+   * of a dependency on them — `types.ts` is imported by everything.
+   */
+  capacity?: CapacityBlock;
   meta: CaseMeta;
   globals: Globals;
   scenarios: Record<ScenarioKey, ScenarioParams>;

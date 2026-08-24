@@ -20,8 +20,27 @@
  */
 
 import { MISSING, isMissing } from "./alg";
-import type { Driver, Sentinel } from "./types";
+import type {
+  CapacityStudy,
+  DemandCell,
+  Driver,
+  ProcessRow,
+  RoleCapacity,
+  Sentinel,
+  StatusShares,
+} from "./types";
 import { SENTINEL } from "./types";
+
+// The document shapes live in types.ts, which everything imports. Re-exported here so
+// callers can take the types and the behaviour from one place.
+export type { CapacityStudy, DemandCell, ProcessRow, RoleCapacity, StatusShares };
+
+/** The outcome split in force for a demand cell: its own, else the type default. */
+export const sharesForCell = (
+  cell: DemandCell,
+  defaults: StatusShares,
+): Record<string, number> => cell.outcomeShares ?? defaults[cell.transactionType] ?? {};
+
 
 /* -------------------------------------------------------------------------- */
 /* Role identity                                                              */
@@ -66,124 +85,6 @@ export const roleCollisions = (rows: ProcessRow[], columns: string[]): Array<{
 /* -------------------------------------------------------------------------- */
 /* Types                                                                      */
 /* -------------------------------------------------------------------------- */
-
-/**
- * One leaf of the process taxonomy.
- *
- * `applicability` is what makes a single register serve several transaction shapes: a
- * step may happen on a new submission but not a renewal, and on a bound policy but not
- * a declined one. An EMPTY list means "applies to all", because a study that leaves the
- * flags blank means the step is universal, not that it never happens.
- */
-export interface ProcessRow {
-  id: string;
-  /** Coarse to fine, e.g. ["5 Client Servicing", "5.2 Process Request", ...]. */
-  path: string[];
-  /** Top-level split, e.g. line of business. */
-  lob: string;
-  region: string;
-  /** Transaction types this step applies to. Empty = all. */
-  transactionTypes: string[];
-  /** Final statuses this step applies to. Empty = all. */
-  statuses: string[];
-  /**
-   * Role assignment per column, e.g. { current: "UW", target: "UA" }. A column absent
-   * from this map, or holding "", is unassigned for that scenario — see G30.
-   */
-  roles: Record<string, string>;
-  /** Minutes for ONE occurrence of the step. */
-  ahtMinutes: Driver;
-  /**
-   * Occurrences per transaction. At or below 1 this reads as the share of transactions
-   * where the step happens; above 1 the step happens more than once. Both are legal.
-   */
-  frequency: Driver;
-  /** Minutes to redo the step. Absent means no rework is modelled for this step. */
-  reworkMinutes?: Driver;
-  /** Share of occurrences that need redoing. */
-  reworkFrequency?: Driver;
-  /**
-   * The study's own stated expected-minutes figure, where it carries one.
-   *
-   * A real study computes this from the components — but not always. In the study this
-   * was modelled on, 170 of 2,229 cells were typed in rather than calculated, and six of
-   * those disagreed with their own inputs: hardcoded to 0 while the components said
-   * otherwise, evidently to take a step out of scope without deleting its measurements.
-   *
-   * So the stated figure WINS when present, because it is what the client's own totals
-   * use and reproducing those is what makes the model trustworthy to them. G32 reports
-   * every divergence, so a deliberate override stays visible and an accidental one gets
-   * found.
-   */
-  statedMinutes?: Driver;
-}
-
-/** Capacity parameters for one role. No cost — that is a separate layer. */
-export interface RoleCapacity {
-  role: string;
-  workingHoursPerYear: number;
-  utilisationPct: number;
-  /**
-   * Work assigned here leaves human capacity entirely — an automation target. It still
-   * appears in the results with its minutes, so the automation is visible rather than
-   * simply missing, but it consumes no FTE.
-   */
-  automated?: boolean;
-  /**
-   * A placeholder owner rather than a real team, e.g. "NA" for a step nobody has been
-   * assigned yet. Its minutes are reported as undecided scope and never costed or
-   * staffed, because pretending someone does the work is the more dangerous error.
-   */
-  unassigned?: boolean;
-}
-
-/** Transactions received for one (lob, transactionType). */
-export interface DemandCell {
-  lob: string;
-  transactionType: string;
-  /**
-   * Transactions RECEIVED, not transactions completed.
-   *
-   * This is the definition that matters most in the whole module. A submission that is
-   * lost or declined still consumes most of the work a bound one does — in the study
-   * this was modelled on, 826 minutes against 957 — so counting only bound policies
-   * understates required capacity by nearly a factor of two.
-   */
-  submissions: Driver;
-  /**
-   * This cell's own outcome split, as shares summing to 1.
-   *
-   * Held per cell rather than only per transaction type because the mix genuinely
-   * differs by line of business — one book may bind 60% of what it quotes and another
-   * 50% — and a single split across both would move required capacity in the wrong
-   * direction for each. Falls back to `CapacityStudy.statusShares` when absent.
-   */
-  outcomeShares?: Record<string, number>;
-}
-
-/**
- * Default outcome splits by transaction type, used for any demand cell that does not
- * carry its own.
- *
- * Endorsements are always bound; new submissions are bound, lost or declined. G29
- * requires each set to sum to 1 and does not silently normalise it.
- */
-export type StatusShares = Record<string, Record<string, number>>;
-
-/** The outcome split in force for a demand cell: its own, else the type default. */
-export const sharesForCell = (
-  cell: DemandCell,
-  defaults: StatusShares,
-): Record<string, number> => cell.outcomeShares ?? defaults[cell.transactionType] ?? {};
-
-export interface CapacityStudy {
-  rows: ProcessRow[];
-  demand: DemandCell[];
-  statusShares: StatusShares;
-  roles: RoleCapacity[];
-  /** Which role columns the study carries, e.g. ["current", "proposed", "target"]. */
-  roleColumns: string[];
-}
 
 /* -------------------------------------------------------------------------- */
 /* Effective minutes                                                          */

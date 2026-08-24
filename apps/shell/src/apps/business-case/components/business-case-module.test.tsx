@@ -17,6 +17,7 @@
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
+import { BATCHES } from "../lib/case-questions";
 import { BusinessCaseModule } from "./business-case-module";
 
 const AS_OF = "2026-08-18";
@@ -48,9 +49,14 @@ describe("module shell", () => {
     expect(tab(/business case/i).hasAttribute("disabled")).toBe(true);
   });
 
-  it("shows all nine batches in the rail", () => {
+  it("shows every declared batch in the rail", () => {
     mount();
-    expect(within(rail()).getAllByRole("button")).toHaveLength(9);
+    // Derived from BATCHES rather than hardcoded, so adding a batch does not require
+    // editing a number here — and a batch that fails to render still fails the test.
+    expect(within(rail()).getAllByRole("button")).toHaveLength(BATCHES.length);
+    for (const batch of BATCHES) {
+      expect(within(rail()).getByRole("button", { name: new RegExp(batch.label, "i") })).toBeTruthy();
+    }
   });
 
   it("lists the outstanding required answers, and Generate is unavailable", () => {
