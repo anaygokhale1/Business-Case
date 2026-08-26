@@ -2,15 +2,85 @@
 
 All synthetic — invented lines of business, invented processes, invented figures.
 
+**Start here.** `simple-time-study-template.csv` and `simple-volumes-template.csv` are the
+default pair. Between them they size capacity by role in both the current and the target
+state, which is what most cases need.
+
 | Template | Grain | Where it imports | What it answers |
 |---|---|---|---|
-| `capacity-study-template.csv` | one row per process step | Process study & volumes | how long the work takes, and who does it |
-| `capacity-volumes-template.csv` | one row per line of business × transaction type | Process study & volumes | how much work there is |
+| `simple-time-study-template.csv` | one row per task | Time study & volumes → Simple | how long each task takes, and who does it now and after |
+| `simple-volumes-template.csv` | one row per task type | Time study & volumes → Simple | how many transactions of each type |
+| `capacity-study-template.csv` | one row per process step | Time study & volumes → Detailed | the same, for a client with an existing process taxonomy |
+| `capacity-volumes-template.csv` | one row per line of business × transaction type | Time study & volumes → Detailed | how much work there is, split by outcome |
 | `region-volumes-template.csv` | one row per region, or region × process | Workload & demand | how much work there is, by where it happens |
-| `time-study-sample.csv` | one row per task | Time study | the simpler flat study, for a case with no role dimension |
+| `time-study-sample.csv` | one row per task | Handle-time study | a flat study whose only job is an average handle time |
 
-The capacity pair belongs together — ask for them as **two sheets in one workbook**. The
-client maintains one artefact, it travels as one attachment, and the importer reads both.
+Each pair belongs together — ask for them as **two sheets in one workbook**. The client
+maintains one artefact, it travels as one attachment, and the importer reads both.
+
+## The simple format
+
+```
+Task / Action        | Task Type | Current Role | Target Role | Average Handling Time
+Log the request      | New       | Analyst      | Assistant   | 10.0
+Check completeness   | New       | Analyst      | Analyst     | 20.0
+Price the risk       | New       | Analyst      | System      | 30.0
+```
+
+```
+Task Type | Volume
+New       | 10000
+```
+
+**Task Type is the join.** It is the one column that has to agree between the two files;
+everything else is local to its own file. A type that appears in the study but not in the
+volumes contributes nothing, so its tasks silently drop out and the capacity figure comes out
+complete-looking and too low. The importer reconciles the two and names any type missing from
+either side — neither file can detect this on its own, because each is internally consistent.
+
+Then, per role: `required FTE = Σ (volume of the type × handling time) ÷ (hours × utilisation
+× 60)`. Once against **Current Role** and once against **Target Role**, and the difference per
+role is the surplus or deficit.
+
+### What each column is for
+
+- **`Task / Action`** — the row's label. It drives nothing; it is what makes the roll-up
+  reviewable and lets a repeated measurement be spotted. Blank falls back to the task type.
+- **`Task Type`** — the join, above. Also the grain volume is counted at.
+- **`Current Role`** — who does the task today. This is the baseline the whole comparison is
+  measured from, so a task with no current owner understates the as-is requirement, and the
+  importer says so rather than dropping the row.
+- **`Target Role`** — who does it after. **Leave it blank for a task that does not move.** A
+  blank means the work stays with the current role, not that it goes nowhere, so a study only
+  needs to name the roles that actually change. A role named `System`, `RPA`, `Bot` or
+  `Automation` is read as an automation target: its minutes leave human capacity rather than
+  being staffed at some notional productivity.
+- **`Average Handling Time`** — minutes for one occurrence, per transaction of the type. The
+  simple format has no frequency column, so each task is taken as happening once per
+  transaction; a task that happens on only half of them should carry half the minutes, or use
+  the detailed format, which has an explicit `Frequency` column.
+
+### Volumes: one row per type, or one per task
+
+Both shapes import. Which one you have decides how a repeated task type is read, and the
+importer infers it from the columns present and then shows it as a control:
+
+- **`Task Type, Volume` only** → one row per type. Repeated types are **added up** (a file
+  split by month, say).
+- **Roles or handling times also present** → one row per task, and the volume against each row
+  is that type's count restated. Taken **once**, not summed. Adding them would multiply demand
+  by the number of tasks in the type, and nothing in the result would look wrong.
+
+A file of the second shape is a study in its own right, so the importer offers to use it as
+both — which is the whole model from a single file.
+
+### What is not in either file
+
+Working hours per year and utilisation. No time study carries them, so every role arrives on
+the documented default of 1,880 hours at 75%, badged as a default until changed in the **Role
+capacity** step. All-in annual cost per role is not in them either, and nothing is assumed:
+until a cost is entered the output shows capacity and says explicitly that there is no money in
+the case yet.
 
 ## Two volume templates, because there are two models
 

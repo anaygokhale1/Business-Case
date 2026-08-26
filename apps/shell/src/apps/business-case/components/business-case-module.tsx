@@ -13,6 +13,7 @@ import { useState } from "react";
 
 import { CaseStoreProvider, useCaseStore } from "../hooks/use-case-store";
 import { BusinessCaseWorkspace } from "./business-case-workspace";
+import { CapacityWorkspace } from "./capacity-workspace";
 import { InputsWorkspace } from "./inputs/inputs-workspace";
 
 type TabKey = "inputs" | "case";
@@ -37,7 +38,7 @@ export function BusinessCaseModule({
 }
 
 function Tabs({ projectId }: { projectId: string }) {
-  const { readiness, generated } = useCaseStore();
+  const { readiness, generated, workingCase } = useCaseStore();
   const [tab, setTab] = useState<TabKey>(generated ? "case" : "inputs");
 
   // Falling back rather than rendering an unbuildable case: if the user removes an
@@ -84,6 +85,11 @@ function Tabs({ projectId }: { projectId: string }) {
 
       {showing === "inputs" ? (
         <InputsWorkspace onGenerated={() => setTab("case")} />
+      ) : workingCase.model === "capacity" ? (
+        // Its own output rather than the register view with capacity bolted on: a capacity
+        // case has no volume or headcount per row, so that view would be a table of blanks
+        // sitting next to a correct answer.
+        <CapacityWorkspace />
       ) : (
         <BusinessCaseWorkspace projectId={projectId} />
       )}

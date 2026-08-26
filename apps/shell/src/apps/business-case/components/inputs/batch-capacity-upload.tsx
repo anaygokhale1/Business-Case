@@ -29,7 +29,18 @@ import {
   type VolumeMapping,
 } from "../../lib/import/volumes";
 import { count, fte } from "../../lib/format";
-import { ghostButtonClass, inputClass, Note, Panel, primaryButtonClass } from "./fields";
+import { SimpleCapacityUpload } from "./simple-capacity-upload";
+import { ghostButtonClass, inputClass, Note, Panel, pillClass, primaryButtonClass } from "./fields";
+
+/**
+ * Which shape of study is being uploaded.
+ *
+ * Two formats rather than one because they answer to different sources. The simple format
+ * is what a study looks like when it is built for this exercise; the detailed one is what
+ * arrives when a client already runs a process taxonomy and measures against it. Both feed
+ * the same engine, so this is a reading of the file, not a different model.
+ */
+type Format = "simple" | "detailed";
 
 type Kind = "study" | "volumes";
 
@@ -46,6 +57,12 @@ interface Staged {
 export function BatchCapacityUpload({ blurb }: { blurb: string }) {
   const { workingCase, dispatch } = useCaseStore();
   const capacity = workingCase.capacity;
+
+  // Detailed only when the loaded study is one: a study with more role columns than the
+  // simple format produces, or with a taxonomy deeper than one level.
+  const looksDetailed =
+    (capacity?.roleColumns.length ?? 0) > 2 || (capacity?.rows.some((r) => r.path.length > 1) ?? false);
+  const [format, setFormat] = useState<Format>(looksDetailed ? "detailed" : "simple");
 
   const [staged, setStaged] = useState<Staged | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -86,7 +103,44 @@ export function BatchCapacityUpload({ blurb }: { blurb: string }) {
   };
 
   return (
-    <Panel title="Process study & volumes" blurb={blurb}>
+    <Panel title="Time study & volumes" blurb={blurb}>
+      <div className="space-y-6">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-[11px] font-extrabold uppercase tracking-[0.14em] text-outline">
+            Format
+          </span>
+          <button
+            type="button"
+            className={pillClass(format === "simple")}
+            onClick={() => {
+              setFormat("simple");
+              setStaged(null);
+            }}
+          >
+            Simple &mdash; five columns
+          </button>
+          <button
+            type="button"
+            className={pillClass(format === "detailed")}
+            onClick={() => {
+              setFormat("detailed");
+              setStaged(null);
+            }}
+          >
+            Detailed &mdash; process taxonomy
+          </button>
+        </div>
+
+        {/* Called, not rendered as a component: a nested component declaration is a new
+            type on every render, so React would remount the whole detailed panel — and
+            its file inputs — on each keystroke. */}
+        {format === "simple" ? <SimpleCapacityUpload /> : renderDetailed()}
+      </div>
+    </Panel>
+  );
+
+  function renderDetailed() {
+    return (
       <div className="space-y-6">
         <div className="grid gap-4 md:grid-cols-2">
           <UploadCard
@@ -172,8 +226,8 @@ export function BatchCapacityUpload({ blurb }: { blurb: string }) {
           {count(1880)} hours at 75% and are badged as defaults until you change them.
         </Note>
       </div>
-    </Panel>
-  );
+    );
+  }
 }
 
 /* -------------------------------------------------------------------------- */

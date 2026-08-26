@@ -13,7 +13,7 @@
  */
 
 import { weightedAverageHandleTime } from "./engine/drivers";
-import type { Case } from "./engine/types";
+import type { Case, CaseModel } from "./engine/types";
 import { SENTINEL } from "./engine/types";
 
 export type BatchId =
@@ -46,7 +46,30 @@ export interface Question {
   /** Blocks generating the case. Everything else is optional or has a default. */
   required: boolean;
   status: (c: Case) => AnswerStatus;
+  /**
+   * Which models the question belongs to. Absent means both.
+   *
+   * The two models ask for genuinely different things: the reduction model needs a unit
+   * register with headcount and cost per row, the capacity model needs a task study and
+   * volumes. Marked here rather than inside each `status` function so the answer to
+   * "does this question apply?" lives in one place, and so a question cannot be required
+   * in a model that has no field for it — which is what would otherwise lock the output
+   * tab shut on a case that is complete.
+   */
+  models?: readonly CaseModel[];
 }
+
+/** Only in the reduction model — the unit register and the scenario spread. */
+const REDUCTION_ONLY: readonly CaseModel[] = ["reduction"] as const;
+
+/** Only in the capacity model — the task study and its volumes. */
+const CAPACITY_ONLY: readonly CaseModel[] = ["capacity"] as const;
+
+/** The model in force. Absent on older saved cases, which are all reduction cases. */
+export const modelOf = (c: Case): CaseModel => c.model ?? "reduction";
+
+const appliesToModel = (q: Question, c: Case): boolean =>
+  q.models === undefined || q.models.includes(modelOf(c));
 
 export interface Batch {
   id: BatchId;
@@ -64,8 +87,8 @@ export interface Batch {
  * skippable, and the form says which answers are the reason rather than showing a
  * disabled button with no explanation.
  */
-export const isSkippable = (id: BatchId): boolean =>
-  !QUESTIONS.some((q) => q.batch === id && q.required);
+export const isSkippable = (c: Case, id: BatchId): boolean =>
+  !QUESTIONS.some((q) => q.batch === id && q.required && appliesToModel(q, c));
 
 export const BATCHES: readonly Batch[] = [
   {
@@ -105,9 +128,11 @@ export const BATCHES: readonly Batch[] = [
   },
   {
     id: "timeStudy",
-    label: "Time study",
+    // Named for what it produces rather than what it is, because the capacity uploads are
+    // also a time study and two rail items called "Time study" is a coin toss for the user.
+    label: "Handle-time study",
     blurb:
-      "Optional. Task-level times and volumes, from which a volume-weighted average handle time is derived. Only used when the handle-time source is set to Time Study.",
+      "Optional. Task-level times and volumes for the register model, from which a volume-weighted average handle time is derived. Only used when the handle-time source is set to Time Study.",
   },
   {
     id: "scenarios",
@@ -117,9 +142,9 @@ export const BATCHES: readonly Batch[] = [
   },
   {
     id: "capacityUpload",
-    label: "Process study & volumes",
+    label: "Time study & volumes",
     blurb:
-      "Upload a process time study and a volume sheet. The study says how long each step takes and who does it; the volumes say how much work there is. Between them they fill in most of what follows.",
+      "Upload a time study and a volumes study. The study says how long each task takes and who does it now and in the target state; the volumes say how many of each task type there are. Between them they size capacity by role in both states.",
   },
   {
     id: "roleCapacity",
@@ -190,9 +215,10 @@ export const QUESTIONS: readonly Question[] = [
   { id: "Q5", batch: "company", label: "Prepared by and model date", required: false, status: (c) => text(c.meta.preparedBy) },
 
   /* ---- Batch 2: Scope & regions (Q6–Q8) ---- */
-  { id: "Q6", batch: "scope", label: "Regions in scope", required: true, status: (c) => (c.units.length === 0 ? "empty" : "answered") },
+  { id: "Q6", batch: "scope", label: "Regions in scope", required: true, status: (c) => (c.units.length === 0 ? "empty" : "answered"), models: REDUCTION_ONLY },
   {
     id: "Q7",
+    models: REDUCTION_ONLY,
     batch: "scope",
     label: "Working hours per year",
     required: false,
@@ -203,6 +229,7 @@ export const QUESTIONS: readonly Question[] = [
   },
   {
     id: "Q8",
+    models: REDUCTION_ONLY,
     batch: "scope",
     label: "Utilisation %",
     required: false,
@@ -239,6 +266,7 @@ export const QUESTIONS: readonly Question[] = [
   /* ---- Batch 4: Units & headcount (Q11, Q12) ---- */
   {
     id: "Q11",
+    models: REDUCTION_ONLY,
     batch: "units",
     label: "Front-line FTE per row",
     required: true,
@@ -246,6 +274,7 @@ export const QUESTIONS: readonly Question[] = [
   },
   {
     id: "Q12",
+    models: REDUCTION_ONLY,
     batch: "units",
     label: "Manager FTE per row",
     required: false,
@@ -258,6 +287,7 @@ export const QUESTIONS: readonly Question[] = [
   /* ---- Batch 5: Compensation (Q15, Q16) ---- */
   {
     id: "Q15",
+    models: REDUCTION_ONLY,
     batch: "compensation",
     label: "All-in cost per front-line FTE",
     required: true,
@@ -265,6 +295,7 @@ export const QUESTIONS: readonly Question[] = [
   },
   {
     id: "Q16",
+    models: REDUCTION_ONLY,
     batch: "compensation",
     label: "All-in cost per manager FTE",
     required: false,
@@ -278,6 +309,7 @@ export const QUESTIONS: readonly Question[] = [
   { id: "Q17", batch: "workload", label: "Workload unit name", required: true, status: (c) => text(c.meta.workloadUnitName) },
   {
     id: "Q18",
+    models: REDUCTION_ONLY,
     batch: "workload",
     label: "Annual volume per row",
     required: true,
@@ -286,9 +318,10 @@ export const QUESTIONS: readonly Question[] = [
       return c.units.every((u) => typeof u.volume === "number") ? "answered" : "empty";
     },
   },
-  { id: "Q19", batch: "workload", label: "Handle time source", required: false, status: (c) => (c.globals.handleTimeSource === "Manual" ? "default" : "answered") },
+  { id: "Q19", batch: "workload", label: "Handle time source", required: false, status: (c) => (c.globals.handleTimeSource === "Manual" ? "default" : "answered"), models: REDUCTION_ONLY },
   {
     id: "Q20",
+    models: REDUCTION_ONLY,
     batch: "workload",
     label: "Average handle time (minutes)",
     required: true,
@@ -302,7 +335,7 @@ export const QUESTIONS: readonly Question[] = [
       return "empty";
     },
   },
-  { id: "Q22", batch: "workload", label: "Volume uplift % over the horizon", required: false, status: (c) => withDefault(c.globals.upliftPct, 0) },
+  { id: "Q22", batch: "workload", label: "Volume uplift % over the horizon", required: false, status: (c) => withDefault(c.globals.upliftPct, 0), models: REDUCTION_ONLY },
 
   /* ---- Batch 7: Time study (Q21) ---- */
   {
@@ -319,9 +352,9 @@ export const QUESTIONS: readonly Question[] = [
   /* ---- Batch 8: Scenarios & severance (Q23–Q28) ---- */
   // The skill gives these as examples, not defaults, so an untouched zero is empty
   // rather than a default being held. See SUGGESTED_SCENARIOS.
-  { id: "Q23", batch: "scenarios", label: "HC reduction % — Low", required: false, status: (c) => (c.scenarios.low.hcReductionPct > 0 ? "answered" : "empty") },
-  { id: "Q24", batch: "scenarios", label: "HC reduction % — Base", required: true, status: (c) => (c.scenarios.base.hcReductionPct > 0 ? "answered" : "empty") },
-  { id: "Q25", batch: "scenarios", label: "HC reduction % — High", required: false, status: (c) => (c.scenarios.high.hcReductionPct > 0 ? "answered" : "empty") },
+  { id: "Q23", batch: "scenarios", label: "HC reduction % — Low", required: false, status: (c) => (c.scenarios.low.hcReductionPct > 0 ? "answered" : "empty"), models: REDUCTION_ONLY },
+  { id: "Q24", batch: "scenarios", label: "HC reduction % — Base", required: true, status: (c) => (c.scenarios.base.hcReductionPct > 0 ? "answered" : "empty"), models: REDUCTION_ONLY },
+  { id: "Q25", batch: "scenarios", label: "HC reduction % — High", required: false, status: (c) => (c.scenarios.high.hcReductionPct > 0 ? "answered" : "empty"), models: REDUCTION_ONLY },
   {
     id: "Q26",
     batch: "scenarios",
@@ -380,16 +413,19 @@ export const QUESTIONS: readonly Question[] = [
   /* ---- Capacity model: additions beyond the skill's 35 ---- */
   {
     id: "C1",
+    models: CAPACITY_ONLY,
     batch: "capacityUpload",
-    label: "Process time study",
-    required: false,
+    label: "Time study",
+    // The capacity model cannot produce a single number without it, so it blocks.
+    required: true,
     status: (c) => ((c.capacity?.rows.length ?? 0) > 0 ? "answered" : "empty"),
   },
   {
     id: "C2",
+    models: CAPACITY_ONLY,
     batch: "capacityUpload",
-    label: "Transaction volumes",
-    required: false,
+    label: "Volumes study",
+    required: true,
     status: (c) => ((c.capacity?.demand.length ?? 0) > 0 ? "answered" : "empty"),
   },
   {
@@ -448,7 +484,8 @@ export const batchProgress = (
   BATCHES.map((batch) => {
     const questions = QUESTIONS.filter((q) => q.batch === batch.id).map((question) => ({
       question,
-      status: question.status(c),
+      // A question outside the active model is not unanswered, it is not asked.
+      status: appliesToModel(question, c) ? question.status(c) : ("n/a" as AnswerStatus),
     }));
     const isSkipped = skipped.has(batch.id);
     // A skipped batch contributes nothing to the denominator, so the progress figure
@@ -463,7 +500,7 @@ export const batchProgress = (
       blocking: applicable
         .filter((q) => q.question.required && q.status === "empty")
         .map((q) => q.question),
-      skippable: isSkippable(batch.id),
+      skippable: isSkippable(c, batch.id),
       skipped: isSkipped,
     };
   });

@@ -236,7 +236,7 @@ describe("time study", () => {
     fireEvent.click(button(/add region/i));
     fireEvent.change(screen.getAllByRole("textbox")[0]!, { target: { value: "APAC" } });
     fireEvent.click(button(/add region/i));
-    goToBatch(/time study/i);
+    goToBatch(/handle-time study/i);
   };
 
   it("offers a scope per region plus a portfolio-wide scope", () => {
@@ -288,7 +288,7 @@ describe("time study", () => {
     goToBatch(/workload & demand/i);
     fireEvent.change(input(/annual volume for europe/i), { target: { value: "250000" } });
 
-    goToBatch(/time study/i);
+    goToBatch(/handle-time study/i);
     fireEvent.click(button(/^Europe$/));
     fireEvent.click(button(/add a task row/i));
     fireEvent.change(input(/minutes for task row 1/i), { target: { value: "30" } });
@@ -307,19 +307,19 @@ describe("time study", () => {
 describe("skipping a section", () => {
   it("marks the time study not applicable and drops it from the count", () => {
     mount();
-    goToBatch(/time study/i);
+    goToBatch(/handle-time study/i);
     fireEvent.click(button(/not applicable/i));
 
     expect(screen.getByText(/is marked not applicable/i)).toBeTruthy();
     // The rail entry reads "skipped" and "not applicable" rather than a progress count.
-    const entry = within(rail()).getByRole("button", { name: /time study/i });
+    const entry = within(rail()).getByRole("button", { name: /handle-time study/i });
     expect(entry.textContent).toContain("skipped");
     expect(entry.textContent).toContain("not applicable");
   });
 
   it("can be taken back", () => {
     mount();
-    goToBatch(/time study/i);
+    goToBatch(/handle-time study/i);
     fireEvent.click(button(/not applicable/i));
     fireEvent.click(button(/include this section/i));
     expect(screen.getByRole("heading", { name: /^time study$/i })).toBeTruthy();
@@ -339,7 +339,7 @@ describe("skipping a section", () => {
     fireEvent.click(button(/^Time Study$/));
     expect(button(/^Time Study$/).getAttribute("aria-pressed")).toBe("true");
 
-    goToBatch(/time study/i);
+    goToBatch(/handle-time study/i);
     fireEvent.click(button(/not applicable/i));
 
     // Otherwise the model keeps reading a table the user has just declared irrelevant.

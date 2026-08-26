@@ -1,0 +1,10 @@
+Task / Action,Task Type,Current Role,Target Role,Average Handling Time
+Log the request,New,Analyst,Assistant,10.0
+Check completeness,New,Analyst,Analyst,20.0
+Price the risk,New,Analyst,System,30.0
+Issue documents,New,Assistant,Assistant,5.0
+Log the request,Renewal,Analyst,Assistant,8.0
+Review terms,Renewal,Analyst,Analyst,15.0
+Issue documents,Renewal,Assistant,Assistant,4.0
+Log the request,Amendment,Analyst,Assistant,6.0
+Apply the change,Amendment,Analyst,,12.0

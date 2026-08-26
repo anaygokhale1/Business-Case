@@ -36,6 +36,18 @@ afterEach(() => {
 
 const rail = () => screen.getByRole("navigation", { name: /input batches/i });
 const goToBatch = (name: RegExp) => fireEvent.click(within(rail()).getByRole("button", { name }));
+
+/**
+ * Open the uploads batch on the DETAILED format.
+ *
+ * The batch opens on the simple five-column format, which is the common case. These tests
+ * are about the wide process-taxonomy importer, so they select it explicitly rather than
+ * depending on which format happens to be the default.
+ */
+const goToDetailedUploads = () => {
+  goToBatch(/time study & volumes/i);
+  fireEvent.click(screen.getByRole("button", { name: /detailed/i }));
+};
 const button = (name: RegExp) => screen.getByRole<HTMLButtonElement>("button", { name });
 const input = (name: RegExp) => screen.getByLabelText<HTMLInputElement>(name);
 
@@ -49,7 +61,7 @@ const upload = async (label: RegExp, file: File) => {
 describe("uploading a process study", () => {
   it("stages the file, proposes a mapping and previews the rows", async () => {
     mount();
-    goToBatch(/process study & volumes/i);
+    goToDetailedUploads();
     await upload(/upload process time study/i, csvFile("study.csv", STUDY));
 
     // The discovered groups are the ones that vary in width, so they are shown for review.
@@ -63,7 +75,7 @@ describe("uploading a process study", () => {
 
   it("populates the questionnaire on import", async () => {
     mount();
-    goToBatch(/process study & volumes/i);
+    goToDetailedUploads();
     await upload(/upload process time study/i, csvFile("study.csv", STUDY));
     fireEvent.click(button(/import 4 steps/i));
 
@@ -81,7 +93,7 @@ describe("uploading a process study", () => {
 
   it("fills the role list in the Roles step from the study", async () => {
     mount();
-    goToBatch(/process study & volumes/i);
+    goToDetailedUploads();
     await upload(/upload process time study/i, csvFile("study.csv", STUDY));
     fireEvent.click(button(/import 4 steps/i));
 
@@ -93,7 +105,7 @@ describe("uploading a process study", () => {
 
   it("picks the as-is and to-be columns and lets them be changed", async () => {
     mount();
-    goToBatch(/process study & volumes/i);
+    goToDetailedUploads();
     await upload(/upload process time study/i, csvFile("study.csv", STUDY));
     fireEvent.click(button(/import 4 steps/i));
 
@@ -111,7 +123,7 @@ describe("uploading a process study", () => {
 describe("uploading volumes", () => {
   it("derives the outcome mix from the counts and shows it", async () => {
     mount();
-    goToBatch(/process study & volumes/i);
+    goToDetailedUploads();
     await upload(/upload transaction volumes/i, csvFile("volumes.csv", VOLUMES));
 
     // 6,000 of 10,000 bound. Derived, not asserted.
@@ -123,7 +135,7 @@ describe("uploading volumes", () => {
 
 describe("both files together", () => {
   const uploadBoth = async () => {
-    goToBatch(/process study & volumes/i);
+    goToDetailedUploads();
     await upload(/upload process time study/i, csvFile("study.csv", STUDY));
     fireEvent.click(button(/import 4 steps/i));
     await upload(/upload transaction volumes/i, csvFile("volumes.csv", VOLUMES));
@@ -200,7 +212,7 @@ describe("both files together", () => {
     cleanup();
 
     mount();
-    goToBatch(/process study & volumes/i);
+    goToDetailedUploads();
     expect(screen.getByText(/4 steps · 3 roles · 2 role columns/i)).toBeTruthy();
     expect(screen.getByText(/1 cells · 10,000 transactions/i)).toBeTruthy();
   });
@@ -208,7 +220,7 @@ describe("both files together", () => {
 
 describe("translating the capacity delta into money", () => {
   const uploadBoth = async () => {
-    goToBatch(/process study & volumes/i);
+    goToDetailedUploads();
     await upload(/upload process time study/i, csvFile("study.csv", STUDY));
     fireEvent.click(button(/import 4 steps/i));
     await upload(/upload transaction volumes/i, csvFile("volumes.csv", VOLUMES));
@@ -350,7 +362,7 @@ describe("the insurance preset", () => {
 describe("a file that cannot be used", () => {
   it("says what is wrong rather than importing nothing quietly", async () => {
     mount();
-    goToBatch(/process study & volumes/i);
+    goToDetailedUploads();
     await upload(
       /upload process time study/i,
       csvFile("wrong.csv", `Name,Address\nAlice,1 High St\nBob,2 Low St`),
@@ -364,7 +376,7 @@ describe("a file that cannot be used", () => {
 
   it("rejects the old .xls format by name", async () => {
     mount();
-    goToBatch(/process study & volumes/i);
+    goToDetailedUploads();
     const xls = new File([new Uint8Array([0xd0, 0xcf, 0x11, 0xe0])], "old.xls");
     fireEvent.change(screen.getByLabelText(/upload process time study/i), {
       target: { files: [xls] },

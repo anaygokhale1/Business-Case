@@ -132,7 +132,7 @@ export function CaseStoreProvider({
     const toggleSkip = (batch: BatchId) => {
       // Guarded here as well as in the UI. A batch carrying a required answer cannot be
       // skipped at all, so there is no state in which the model is generated without it.
-      if (!isSkippable(batch)) return;
+      if (!isSkippable(workingCase, batch)) return;
       setSkipped((current) => {
         const next = new Set(current);
         if (next.has(batch)) next.delete(batch);
