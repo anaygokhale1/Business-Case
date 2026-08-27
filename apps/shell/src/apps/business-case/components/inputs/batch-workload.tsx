@@ -19,6 +19,7 @@ import {
   PercentField,
   TextField,
 } from "./fields";
+import { RoleMoveSummary } from "./role-move-summary";
 import { TaskGrid } from "./task-grid";
 import { UnitGrid, type UnitColumn } from "./unit-grid";
 import { VolumeImport } from "./volume-import";
@@ -57,6 +58,11 @@ export function BatchWorkload({
   const typesWithoutVolume = (capacity?.demand ?? []).filter(
     (cell) => typeof cell.submissions !== "number",
   );
+
+  // Capacity right-sizing is the one core problem whose whole question is which work moves
+  // where, so the future-role column belongs beside the volume rather than a step away. On
+  // any other core problem it is a column of decisions nobody is being asked to make.
+  const rightSizing = meta.coreProblem === "Capacity Right-sizing";
 
   const columns: UnitColumn[] = [
     {
@@ -143,8 +149,25 @@ export function BatchWorkload({
             </span>
           </div>
 
+          {rightSizing ? (
+            <p className="rounded-2xl bg-canvas px-4 py-3 text-xs text-muted">
+              <strong className="text-ink">Which work stays and which moves.</strong> Set a future
+              role on a task to move it; leave it blank and the work stays with the current role.
+              A future role named System, RPA, Bot or Automation takes the work out of human
+              capacity altogether. The comparison beneath the table follows every change.
+            </p>
+          ) : null}
+
           <TaskGrid
-            columns={["task", "taskType", "currentRole", "volume", "minutes"]}
+            // Right-sizing gets the handling time too. The two steps otherwise own different
+            // columns of one table, but a screen whose whole job is the stay-or-move analysis
+            // cannot compute it without the minutes, and sending the user to another step for
+            // them means the comparison below sits empty while the decision is being made.
+            columns={
+              rightSizing
+                ? ["task", "taskType", "currentRole", "targetRole", "aht", "volume", "minutes"]
+                : ["task", "taskType", "currentRole", "volume", "minutes"]
+            }
             addLabel="+ Add a task"
             emptyMessage="No tasks yet. Add them here or upload a time study and a volumes study in the Time study & volumes step — it is the same table either way."
           />
@@ -167,6 +190,10 @@ export function BatchWorkload({
               ) : null}
               .
             </p>
+          ) : null}
+
+          {rightSizing && capacity && capacity.rows.length > 0 ? (
+            <RoleMoveSummary capacity={capacity} globals={globals} />
           ) : null}
         </div>
 
