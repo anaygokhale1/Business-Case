@@ -32,6 +32,13 @@ Task Type | Volume
 New       | 10000
 ```
 
+**The same columns can be typed instead of uploaded.** The **Time study** step owns Task /
+Action, Task Type, Current Role, Target Role and Average Handling Time; the **Workload &
+demand** step owns Task Type and Volume. They are two views of one table, so a task added in
+either appears in both, and a file can be uploaded and then corrected row by row. Volume sits
+on the task type rather than the task — several tasks share a type and there is one count of
+transactions behind all of them — so the volume cell spans its type's rows.
+
 **Task Type is the join.** It is the one column that has to agree between the two files;
 everything else is local to its own file. A type that appears in the study but not in the
 volumes contributes nothing, so its tasks silently drop out and the capacity figure comes out

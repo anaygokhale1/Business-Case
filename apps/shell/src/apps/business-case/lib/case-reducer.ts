@@ -15,6 +15,7 @@
  *     round-trip, which is why `exactOptionalPropertyTypes` stays on.
  */
 
+import { addTask, removeTask, setTask, setTypeVolume, type TaskPatch } from "./capacity-edit";
 import { applyPreset, applyStudy, applyVolumes } from "./capacity-populate";
 import type { CapacityPreset } from "./case-presets";
 import { benchmarkFor, STANDARD_PHASE_WEIGHTS, SUGGESTED_SCENARIOS } from "./case-defaults";
@@ -94,6 +95,11 @@ export type CaseAction =
   | { type: "capacity/applyPreset"; preset: CapacityPreset }
   | { type: "capacity/setNumber"; field: CapacityNumber; value: number }
   | { type: "capacity/setCurrency"; currency: string }
+  /* ---- capacity study, typed by hand ---- */
+  | { type: "capacity/addTask" }
+  | { type: "capacity/setTask"; rowId: string; patch: TaskPatch }
+  | { type: "capacity/removeTask"; rowId: string }
+  | { type: "capacity/setTypeVolume"; taskType: string; volume: number | null }
   | { type: "model/set"; model: CaseModel };
 
 /** Capacity fields the form edits as free numbers. */
@@ -222,6 +228,10 @@ const setRoleMapEntry = (
   roleId: string,
   value: Driver,
 ): Record<string, Driver> => ({ ...map, [roleId]: value });
+
+/** Keep the case identical when a capacity edit was a no-op. */
+const sameOr = (state: Case, capacity: CapacityBlock): Case =>
+  capacity === state.capacity ? state : { ...state, capacity };
 
 const blankUnit = (id: string, name: string, region: string): Unit => ({
   id,
@@ -618,6 +628,27 @@ export function caseReducer(state: Case, action: CaseAction): Case {
       // stating a rate and a date nobody agreed to.
       return { ...state, capacity: { ...state.capacity, currency: action.currency } };
     }
+
+    case "capacity/addTask":
+      // Typing a task is entering the capacity model, the same as uploading a study is.
+      // Leaving the model as it was would put the answer on a tab the case cannot reach.
+      return { ...state, model: "capacity", capacity: addTask(state.capacity) };
+
+    // Each returns the same case object when the edit changed nothing — an edit addressed
+    // to a row that is not there, or a volume for no task type. A fresh object would look
+    // like a change to everything downstream that watches for one, and would rewrite the
+    // stored draft for no reason.
+    case "capacity/setTask":
+      if (!state.capacity) return state;
+      return sameOr(state, setTask(state.capacity, action.rowId, action.patch));
+
+    case "capacity/removeTask":
+      if (!state.capacity) return state;
+      return sameOr(state, removeTask(state.capacity, action.rowId));
+
+    case "capacity/setTypeVolume":
+      if (!state.capacity) return state;
+      return sameOr(state, setTypeVolume(state.capacity, action.taskType, action.volume));
 
     case "model/set":
       return { ...state, model: action.model };

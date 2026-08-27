@@ -36,6 +36,7 @@ import {
   primaryButtonClass,
 } from "./fields";
 import { StudyImport } from "./study-import";
+import { TaskGrid } from "./task-grid";
 
 /** `null` is the portfolio-wide scope. */
 type Scope = string | null;
@@ -75,6 +76,11 @@ export function BatchTimeStudy({
     .reduce((acc, u) => acc + (typeof u.volume === "number" ? u.volume : 0), 0);
 
   const coverage = registerVolume > 0 && studied > 0 ? studied / registerVolume : null;
+
+  // The flat study exists to derive one average handle time for the register model. A
+  // capacity case has a handling time per task instead, so the two do not coexist.
+  const capacityModel = workingCase.model === "capacity";
+  const capacity = workingCase.capacity;
   const unitsInScope = scope === null ? [] : workingCase.units.filter((u) => u.region === scope);
 
   return (
@@ -82,17 +88,58 @@ export function BatchTimeStudy({
       title="Time study"
       blurb={blurb}
       aside={
-        <div className="rounded-2xl bg-canvas px-4 py-3 text-right">
-          <p className="text-[11px] font-extrabold uppercase tracking-[0.14em] text-outline">
-            {scopeLabel(scope)} average
-          </p>
-          <p className="text-xl font-extrabold tabular-nums text-ink">
-            {Number.isNaN(weighted) ? "n/a" : `${weighted.toFixed(1)} min`}
-          </p>
-        </div>
+        capacityModel ? (
+          <div className="rounded-2xl bg-canvas px-4 py-3 text-right">
+            <p className="text-[11px] font-extrabold uppercase tracking-[0.14em] text-outline">
+              Measured
+            </p>
+            <p className="text-xl font-extrabold tabular-nums text-ink">
+              {capacity ? capacity.rows.length : 0} task
+              {capacity && capacity.rows.length === 1 ? "" : "s"}
+            </p>
+          </div>
+        ) : (
+          <div className="rounded-2xl bg-canvas px-4 py-3 text-right">
+            <p className="text-[11px] font-extrabold uppercase tracking-[0.14em] text-outline">
+              {scopeLabel(scope)} average
+            </p>
+            <p className="text-xl font-extrabold tabular-nums text-ink">
+              {Number.isNaN(weighted) ? "n/a" : `${weighted.toFixed(1)} min`}
+            </p>
+          </div>
+        )
       }
     >
       <div className="space-y-6">
+        {/* ---- the task table: the same rows the uploads produce ---- */}
+        <div className="space-y-3">
+          <div className="flex flex-wrap items-baseline justify-between gap-3">
+            <p className="text-[11px] font-extrabold uppercase tracking-[0.14em] text-outline">
+              Tasks, roles and handling times <span className="text-slate-300">C1</span>
+            </p>
+            <span className="text-xs text-outline">
+              Same rows as the Workload &amp; demand step &middot; volume is entered there
+            </span>
+          </div>
+
+          <TaskGrid
+            columns={["task", "taskType", "currentRole", "targetRole", "aht"]}
+            addLabel="+ Add a task"
+            emptyMessage="No tasks yet. Add them here or upload a time study in the Time study & volumes step — it is the same table either way."
+          />
+
+          {capacity && capacity.rows.length > 0 ? (
+            <p className="text-xs text-muted">
+              Leave <strong className="text-ink">Target role</strong> blank for a task that does
+              not move: the work stays with the current role rather than going nowhere. A role
+              named System, RPA, Bot or Automation is read as an automation target, so its minutes
+              leave human capacity instead of being staffed.
+            </p>
+          ) : null}
+        </div>
+
+        {capacityModel ? null : (
+        <>
         {/* ---- what this batch is for, versus the previous one ---- */}
         <Note>
           <strong>This does not add demand.</strong> Annual volume in the Workload step is the
@@ -312,6 +359,8 @@ export function BatchTimeStudy({
           to the portfolio-wide study, and then to the manual figure — never to another region&rsquo;s
           measurement, because how work is done in one place is not evidence about another.
         </Note>
+        </>
+        )}
       </div>
     </Panel>
   );

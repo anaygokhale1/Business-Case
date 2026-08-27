@@ -541,7 +541,12 @@ export const reconcileTaskTypes = (
 ): { withoutVolume: string[]; withoutTasks: string[] } => {
   const inStudy = new Map<string, string>();
   for (const row of rows) {
-    for (const type of row.transactionTypes) inStudy.set(normaliseHeader(type), type);
+    for (const type of row.transactionTypes) {
+      // A row typed into the form starts with no type. That is an unfinished row, not a
+      // type awaiting a volume, and the grid flags it where the user can see it.
+      if (type.trim() === "") continue;
+      inStudy.set(normaliseHeader(type), type);
+    }
   }
   const inVolumes = new Map<string, string>();
   for (const cell of demand) inVolumes.set(normaliseHeader(cell.transactionType), cell.transactionType);

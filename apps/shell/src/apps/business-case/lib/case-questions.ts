@@ -242,6 +242,7 @@ export const QUESTIONS: readonly Question[] = [
   /* ---- Batch 3: Roles & span (Q9, Q10, Q13, Q14) ---- */
   {
     id: "Q9",
+    models: REDUCTION_ONLY,
     batch: "roles",
     label: "Front-line role title",
     required: true,
@@ -249,14 +250,16 @@ export const QUESTIONS: readonly Question[] = [
   },
   {
     id: "Q10",
+    models: REDUCTION_ONLY,
     batch: "roles",
     label: "Manager role title",
     required: false,
     status: (c) => (managerRoles(c).some((r) => r.title.trim() !== "") ? "answered" : "empty"),
   },
-  { id: "Q13", batch: "roles", label: "Target span of control", required: false, status: (c) => withDefault(c.globals.spanOfControl, 8) },
+  { id: "Q13", batch: "roles", label: "Target span of control", required: false, status: (c) => withDefault(c.globals.spanOfControl, 8), models: REDUCTION_ONLY },
   {
     id: "Q14",
+    models: REDUCTION_ONLY,
     batch: "roles",
     label: "Additional role tiers",
     required: false,

@@ -4,6 +4,7 @@ import { useState } from "react";
 
 import { useCaseStore } from "../../hooks/use-case-store";
 import { HANDLE_TIME_SOURCES } from "../../lib/case-defaults";
+import { count } from "../../lib/format";
 import type { AnswerStatus } from "../../lib/case-questions";
 import { resolveGlobals } from "../../lib/engine/drivers";
 import { SENTINEL } from "../../lib/engine/types";
@@ -18,6 +19,7 @@ import {
   PercentField,
   TextField,
 } from "./fields";
+import { TaskGrid } from "./task-grid";
 import { UnitGrid, type UnitColumn } from "./unit-grid";
 import { VolumeImport } from "./volume-import";
 
@@ -42,6 +44,19 @@ export function BatchWorkload({
     0,
   );
   const uncovered = workingCase.units.filter((u) => typeof u.volume !== "number").length;
+
+  // The register questions belong to the reduction model. Once a case is a capacity case
+  // they are not unanswered, they are not asked — so showing them would invite someone to
+  // fill in a register nothing reads.
+  const capacityModel = workingCase.model === "capacity";
+  const capacity = workingCase.capacity;
+  const totalTransactions = (capacity?.demand ?? []).reduce(
+    (total, cell) => total + (typeof cell.submissions === "number" ? cell.submissions : 0),
+    0,
+  );
+  const typesWithoutVolume = (capacity?.demand ?? []).filter(
+    (cell) => typeof cell.submissions !== "number",
+  );
 
   const columns: UnitColumn[] = [
     {
@@ -117,6 +132,44 @@ export function BatchWorkload({
   return (
     <Panel title="Workload & demand" blurb={blurb}>
       <div className="space-y-6">
+        {/* ---- the task table: the same rows the uploads produce ---- */}
+        <div className="space-y-3">
+          <div className="flex flex-wrap items-baseline justify-between gap-3">
+            <p className="text-[11px] font-extrabold uppercase tracking-[0.14em] text-outline">
+              Volume by task <span className="text-slate-300">C2</span>
+            </p>
+            <span className="text-xs text-outline">
+              Same rows as the Time study step &middot; one volume per task type
+            </span>
+          </div>
+
+          <TaskGrid
+            columns={["task", "taskType", "currentRole", "volume", "minutes"]}
+            addLabel="+ Add a task"
+            emptyMessage="No tasks yet. Add them here or upload a time study and a volumes study in the Time study & volumes step — it is the same table either way."
+          />
+
+          {capacity && capacity.rows.length > 0 ? (
+            <p className="text-xs text-muted">
+              <span className="font-semibold text-ink">
+                {count(totalTransactions)} {workload || "transactions"}
+              </span>{" "}
+              across {capacity.demand.length} task type
+              {capacity.demand.length === 1 ? "" : "s"}
+              {typesWithoutVolume.length > 0 ? (
+                <>
+                  , with{" "}
+                  <span className="font-semibold text-red-600">
+                    {typesWithoutVolume.map((c) => c.transactionType).join(", ")} carrying no volume
+                  </span>{" "}
+                  — those tasks contribute nothing to either capacity state
+                </>
+              ) : null}
+              .
+            </p>
+          ) : null}
+        </div>
+
         <FieldGrid cols={3}>
           <TextField
             label="Workload unit name"
@@ -127,6 +180,7 @@ export function BatchWorkload({
             placeholder="Claims"
             hint="What one unit of work is. Every volume and handle-time label reads it."
           />
+          {capacityModel ? null : (
           <div className="md:col-span-1">
             <NumberField
               label="Average handle time"
@@ -145,6 +199,8 @@ export function BatchWorkload({
               }
             />
           </div>
+          )}
+          {capacityModel ? null : (
           <PercentField
             label={`Volume uplift over ${globals.horizonYears} years`}
             questionId="Q22"
@@ -153,6 +209,8 @@ export function BatchWorkload({
             onChange={(v) => dispatch({ type: "globals/setNumber", field: "upliftPct", value: v ?? 0 })}
             hint="Demand growth applied to volume before sizing. Zero if none."
           />
+          )}
+          {capacityModel ? null : (
           <div>
             <ChoiceField
               label="Handle time source"
@@ -163,12 +221,14 @@ export function BatchWorkload({
               onChange={(v) => dispatch({ type: "globals/setChoice", patch: { handleTimeSource: v } })}
             />
           </div>
+          )}
         </FieldGrid>
 
+        {capacityModel ? null : (
         <div className="space-y-3">
           <div className="flex flex-wrap items-baseline justify-between gap-3">
             <p className="text-[11px] font-extrabold uppercase tracking-[0.14em] text-outline">
-              Volume per row <span className="text-slate-300">Q17 · Q18</span>
+              Volume per region <span className="text-slate-300">Q17 · Q18</span>
             </p>
             {importing ? null : (
               <button
@@ -207,7 +267,19 @@ export function BatchWorkload({
             </p>
           ) : null}
         </div>
+        )}
 
+        {capacityModel ? (
+          <Note>
+            <strong>Handling time lives on the task, not here.</strong> Each task carries its
+            own, entered in the Time study step or read from an uploaded study, and required
+            FTE per role is the sum over tasks of{" "}
+            <strong>volume &times; handling time</strong> divided by that role&rsquo;s own
+            productive minutes. There is no single average to assert, and no blended figure is
+            computed — a portfolio average handle time divided into a portfolio volume is not
+            the same number as the sum of the tasks, and the gap grows with how uneven they are.
+          </Note>
+        ) : (
         <Note>
           <strong>Handle time can come from three places.</strong> You assert one average here; the
           Time Study step derives it from task-level times and volumes; or the volumes study above
@@ -216,7 +288,9 @@ export function BatchWorkload({
           volume is still what the case is sized against — so if you already have a measured
           average, that step can be marked not applicable.
         </Note>
+        )}
 
+        {capacityModel ? null : (
         <Note>
           Required FTE for a row is <strong>volume &times; (1 + uplift) &times; handle time</strong>,
           divided by that row&rsquo;s own effective productive minutes. Handle time and uplift left
@@ -225,6 +299,7 @@ export function BatchWorkload({
           divided by an average handle time — averaging a denominator is not the same as averaging the
           result, and the difference grows with how uneven the rows are.
         </Note>
+        )}
       </div>
     </Panel>
   );
