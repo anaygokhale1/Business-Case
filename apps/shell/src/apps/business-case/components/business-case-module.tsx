@@ -12,15 +12,17 @@
 import { useState } from "react";
 
 import { CaseStoreProvider, useCaseStore } from "../hooks/use-case-store";
+import { AnalysisWorkspace } from "./analysis-workspace";
 import { BusinessCaseWorkspace } from "./business-case-workspace";
 import { CapacityWorkspace } from "./capacity-workspace";
 import { InputsWorkspace } from "./inputs/inputs-workspace";
 
-type TabKey = "inputs" | "case";
+type TabKey = "inputs" | "case" | "analysis";
 
 const TABS: Array<{ key: TabKey; label: string }> = [
   { key: "inputs", label: "Input" },
   { key: "case", label: "Business case" },
+  { key: "analysis", label: "Analysis" },
 ];
 
 export function BusinessCaseModule({
@@ -42,9 +44,11 @@ function Tabs({ projectId }: { projectId: string }) {
   const [tab, setTab] = useState<TabKey>(generated ? "case" : "inputs");
 
   // Falling back rather than rendering an unbuildable case: if the user removes an
-  // answer after generating, the output tab stops being a place they can sit.
+  // answer after generating, the output tabs stop being a place they can sit. Analysis is
+  // gated on the same set — it reads the same register, so a half-filled one would give it
+  // frontiers computed from requirements nobody has supplied.
   const outputAvailable = generated && readiness.canGenerate;
-  const showing: TabKey = tab === "case" && !outputAvailable ? "inputs" : tab;
+  const showing: TabKey = tab !== "inputs" && !outputAvailable ? "inputs" : tab;
 
   return (
     <div className="space-y-6">
@@ -54,7 +58,7 @@ function Tabs({ projectId }: { projectId: string }) {
         className="flex flex-wrap gap-1 rounded-full bg-panel p-1"
       >
         {TABS.map((entry) => {
-          const disabled = entry.key === "case" && !outputAvailable;
+          const disabled = entry.key !== "inputs" && !outputAvailable;
           const active = showing === entry.key;
           return (
             <button
@@ -85,6 +89,8 @@ function Tabs({ projectId }: { projectId: string }) {
 
       {showing === "inputs" ? (
         <InputsWorkspace onGenerated={() => setTab("case")} />
+      ) : showing === "analysis" ? (
+        <AnalysisWorkspace />
       ) : workingCase.model === "capacity" ? (
         // Its own output rather than the register view with capacity bolted on: a capacity
         // case has no volume or headcount per row, so that view would be a table of blanks

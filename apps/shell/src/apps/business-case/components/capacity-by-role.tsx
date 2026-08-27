@@ -28,19 +28,13 @@ import { isMissing } from "../lib/engine/alg";
 import { compareCapacity, type RoleDelta } from "../lib/engine/capacity";
 import { reconcileTaskTypes } from "../lib/import/simple-capacity";
 import type { CapacityBlock } from "../lib/engine/types";
+import { SERIES_CURRENT, SERIES_TARGET } from "../lib/chart-palette";
 import { count, fte } from "../lib/format";
 
-/**
- * Series colours for the two states.
- *
- * Steps of the brand's own ink and teal, lightened and given chroma until the palette
- * passes the lightness band, chroma floor, CVD separation and contrast checks. The base
- * tokens fail two of those as data marks — #00346f is below the lightness band and
- * #006b5c below the chroma floor — which is why these are stated here rather than taken
- * from the token set.
- */
-const CURRENT_FILL = "#3a6fc4";
-const TARGET_FILL = "#0f9b86";
+// Shared with the Analysis tab, so blue means "today" on every screen. See
+// `lib/chart-palette.ts` for why these are not the brand tokens.
+const CURRENT_FILL = SERIES_CURRENT;
+const TARGET_FILL = SERIES_TARGET;
 
 const isStaffed = (role: RoleDelta) => !role.automated && !role.unassigned;
 
