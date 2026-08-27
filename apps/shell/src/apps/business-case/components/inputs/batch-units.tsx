@@ -72,7 +72,7 @@ export function BatchUnits({
         <UnitGrid
           columns={columns}
           showAddRow
-          emptyMessage="Add a region in the Scope step first — every row belongs to one."
+          emptyMessage="Add a region in the Scope step first — every team belongs to one."
         />
 
         {status["Q11"] === "empty" && units.length > 0 ? (

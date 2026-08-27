@@ -85,7 +85,7 @@ export function BatchCompensation({
 
         <UnitGrid
           columns={columns}
-          emptyMessage="Add a region in the Scope step first — cost is captured per row."
+          emptyMessage="Add a region in the Scope step first — cost is captured per team."
         />
 
         {allIn.dropped > 0 ? (

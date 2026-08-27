@@ -50,7 +50,7 @@ export function UnitGrid({
           <thead>
             <tr className="text-left">
               <th className="px-4 py-3 text-[11px] font-extrabold uppercase tracking-[0.14em] text-outline">
-                Row
+                Team / Org
               </th>
               <th className="px-4 py-3 text-[11px] font-extrabold uppercase tracking-[0.14em] text-outline">
                 Region
@@ -77,7 +77,7 @@ export function UnitGrid({
                     type="text"
                     className={`${inputClass} min-w-[10rem]`}
                     value={unit.name}
-                    placeholder={unit.region || "Unnamed row"}
+                    placeholder={unit.region || "Unnamed team"}
                     aria-label={`Name for ${unit.id}`}
                     onChange={(event) =>
                       dispatch({ type: "unit/setName", unitId: unit.id, name: event.target.value })
@@ -132,7 +132,7 @@ export function UnitGrid({
 
       {showAddRow && regions.length > 0 ? (
         <div className="flex flex-wrap items-center gap-2">
-          <span className="text-xs font-semibold text-outline">Split a region into another row:</span>
+          <span className="text-xs font-semibold text-outline">Split a region into another team:</span>
           {regions.map((region) => (
             <button
               key={region}

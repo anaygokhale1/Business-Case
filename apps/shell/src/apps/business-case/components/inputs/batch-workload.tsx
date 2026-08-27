@@ -61,7 +61,7 @@ export function BatchWorkload({
   const columns: UnitColumn[] = [
     {
       key: "volume",
-      label: `Annual ${workload || "volume"}`,
+      label: "Annual volume",
       questionId: "Q18",
       align: "right",
       width: "w-44",
@@ -245,7 +245,7 @@ export function BatchWorkload({
 
           <UnitGrid
             columns={columns}
-            emptyMessage="No rows yet — add a region in the Scope step, or upload a volumes study and let it create them."
+            emptyMessage="No teams yet — add a region in the Scope step, or upload a volumes study and let it create them."
           />
 
           {totalVolume > 0 ? (
@@ -253,12 +253,12 @@ export function BatchWorkload({
               <span className="font-semibold text-ink">
                 {totalVolume.toLocaleString("en-US")} {workload || "units"}
               </span>{" "}
-              across {workingCase.units.length} row{workingCase.units.length === 1 ? "" : "s"}
+              across {workingCase.units.length} team{workingCase.units.length === 1 ? "" : "s"}
               {uncovered > 0 ? (
                 <>
                   , with{" "}
                   <span className="font-semibold text-red-600">
-                    {uncovered} row{uncovered === 1 ? "" : "s"} carrying no volume
+                    {uncovered} team{uncovered === 1 ? "" : "s"} carrying no volume
                   </span>{" "}
                   and contributing no required capacity
                 </>
